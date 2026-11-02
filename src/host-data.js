@@ -14,6 +14,8 @@
  * 所以这里每次访问都重新 peek，订阅也用轮询补齐。
  */
 
+import { cleanPreviewText } from './preview-text.js'
+
 /** 安全地取一次服务：插件被装到不支持的宿主版本上时返回 undefined 而不是抛。 */
 function peek(ctx, serviceName) {
   try {
@@ -72,6 +74,12 @@ export function createHostData(ctx) {
      * 而这份投影宿主本来就已经同步到客户端了。
      * 最新一轮 response 为空（正在跑 / 被中断）时退回用 prompt，保证每行都有字。
      */
+    /**
+     * 会话 id → 最新一条消息的预览文本。
+     *
+     * 预览是单行纯文本，渲染不了 markdown，所以这里先把记号去掉：星号、井号、
+     * 反引号、引用符、列表序号、表格竖线、链接外壳都不该出现在两行式预览里。
+     */
     previewBySession() {
       const previews = new Map()
       const snapshot = this.sessionSnapshot()
@@ -83,7 +91,7 @@ export function createHostData(ctx) {
         const last = outline[outline.length - 1] ?? {}
         const response = typeof last.response === 'string' ? last.response.trim() : ''
         const prompt = typeof last.prompt === 'string' ? last.prompt.trim() : ''
-        const text = response !== '' ? response : prompt
+        const text = cleanPreviewText(response !== '' ? response : prompt)
         if (text !== '') previews.set(id, text)
       }
       return previews

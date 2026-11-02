@@ -205,14 +205,21 @@ body[data-codex-sidebar] :is(dialog, [role="dialog"]) {
 }
 
 /*
- * 标题过长时悬停横向滑动，露出被省略号吃掉的尾巴。
+ * 标题过长时悬停横向滑动，滑一次停在尾巴上，移开就复位。
+ *
+ * 只走一趟不再来回：来回摆会把开头的字反复甩出可视区，尾巴反而一直读不完整。
+ * 两端用遮罩淡出，滑到尾部时最后一两个字是渐隐的，不是被硬切一刀。
  * 位移由 date-view.js 现量后写进 --codex-sidebar-marquee-shift：
  * 标题宽度随窗口与缩放变化，写死距离会滑多或滑不到。
  */
 .codex-sidebar-marquee {
-  overflow: visible !important;
+  overflow: hidden !important;
   text-overflow: clip !important;
-  animation: codex-sidebar-marquee 4.2s ease-in-out infinite alternate;
+  padding-right: 10px;
+  mask-image: linear-gradient(90deg, transparent 0, #000 12px, #000 calc(100% - 12px), transparent 100%);
+  -webkit-mask-image: linear-gradient(90deg, transparent 0, #000 12px, #000 calc(100% - 12px), transparent 100%);
+  animation: codex-sidebar-marquee 1.15s cubic-bezier(0.4, 0, 0.2, 1) forwards;
+  will-change: transform;
 }
 
 @keyframes codex-sidebar-marquee {
