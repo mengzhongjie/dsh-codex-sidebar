@@ -106,3 +106,150 @@ export function resolveLocale(ctx) {
 export function labelsFor(locale) {
   return locale === 'zh' ? LABELS.zh : LABELS.en
 }
+
+/**
+ * 造一个「会自己更新」的界面语言源。
+ *
+ * 为什么不在 apply 时判定一次：宿主的 locale 服务与 <html lang> 都可能比插件晚就绪
+ * （实测桌面 App 里 apply 时读到的还是 en，设置页因此整页英文，而宿主导航是中文）。
+ * 这里先判一次，然后最多轮询 30 秒；读到宿主值就停，之后靠订阅/轮询捕捉切换。
+ *
+ * @param ctx 插件上下文（用来取 locale 服务）
+ * @returns {{ get: () => object, language: () => string, raw: () => string, subscribe: (fn) => Function, dispose: Function }}
+ */
+/** 从上下文里取宿主 locale 服务（没有/不允许时返回 null，绝不抛）。 */
+function localeServiceOf(ctx) {
+  try {
+    const service = ctx?.get?.('locale')
+    return service === null || service === undefined ? null : service
+  } catch {
+    // 未声明 inject 或服务尚未注册时这里会抛：当作没有。
+    return null
+  }
+}
+
+/**
+ * 造一个「会自己更新」的界面语言源。
+ *
+ * 为什么不在 apply 时判定一次：桌面 App 实测 apply 时读到的还是 en（设置页整页英文，
+ * 而宿主导航是中文）。宿主把语言选择存在 Host 用户设置文档里（namespace "locale"、
+ * 字段 "preference"），客户端要等设置文档就绪后才 adopt 过来，所以这里既订阅服务
+ * 快照变化，又保留一段轮询兜底，保证「晚就绪 / 中途切换」两种情况都能跟上。
+ *
+ * @param ctx 插件上下文（用来取 locale 服务）
+ * @returns {{ get: () => object, language: () => string, raw: () => string, subscribe: (fn) => Function, dispose: Function }}
+ */
+export function createLocale(ctx) {
+  /** 上一次判定的语言（'zh' / 'en'）。 */
+  let language = resolveLocale(ctx)
+  /** 当前语言对应的用词表；语言不变时对象复用，便于调用方做身份比较。 */
+  let labels = labelsFor(language)
+  /** 宿主 locale 服务最后报出的原始串（诊断用）。 */
+  let raw = hostLocaleText(ctx)
+
+  const listeners = new Set()
+  /** 轮询句柄：0 表示已停。 */
+  let timer = 0
+  /** 已经轮询的次数（上限 60 次 ≈ 30 秒）。 */
+  let attempts = 0
+  /** 对宿主 locale 服务的退订函数。 */
+  let offService = null
+
+  function stop() {
+    if (timer !== 0) {
+      window.clearInterval(timer)
+      timer = 0
+    }
+  }
+
+  /** 重新判定；语言变了就换用词表并通知订阅者。 */
+  function refresh() {
+    const nextRaw = hostLocaleText(ctx)
+    const next = resolveLocale(ctx)
+    if (nextRaw !== '') raw = nextRaw
+    if (next === language) return false
+    language = next
+    labels = labelsFor(next)
+    for (const listener of listeners) {
+      try {
+        listener(language, labels)
+      } catch {
+        // 单个订阅者出错不影响其他订阅者。
+      }
+    }
+    return true
+  }
+
+  /**
+   * 绑定宿主 locale 服务的订阅（服务可能比插件晚注册，所以每轮都试一次）。
+   * 宿主快照在 adopt 设置文档后会变：订阅比轮询更及时，也不会白耗一次请求。
+   */
+  function bindService() {
+    if (offService !== null) return true
+    const service = localeServiceOf(ctx)
+    if (service === null || typeof service.subscribe !== 'function') return false
+    try {
+      const off = service.subscribe(() => refresh())
+      offService = typeof off === 'function' ? off : () => {}
+      return true
+    } catch {
+      // 订阅失败就只靠轮询。
+      return false
+    }
+  }
+
+  /** 轮询一次：绑定到服务并且读到值（或轮询到期）就停。 */
+  function tick() {
+    attempts += 1
+    const bound = bindService()
+    refresh()
+    if ((bound && raw !== '') || attempts >= 60) stop()
+  }
+
+  // 用 setTimeout 链而不是 setInterval：每次回调里可能触发别的重排，串行更稳。
+  function scheduleTick() {
+    timer = window.setTimeout(() => {
+      timer = 0
+      tick()
+      if (timer === 0 && attempts < 60) scheduleTick()
+    }, 500)
+  }
+  if (bindService()) refresh()
+  scheduleTick()
+
+  return {
+    /** 当前用词表（调用时顺手刷新一次，切换语言后立刻生效）。 */
+    get() {
+      refresh()
+      return labels
+    },
+    /** 当前语言。 */
+    language() {
+      refresh()
+      return language
+    },
+    /** 宿主 locale 服务报的原始串（没有就是空串）。 */
+    raw() {
+      refresh()
+      return raw
+    },
+    /** 订阅语言变化；返回取消函数。 */
+    subscribe(listener) {
+      listeners.add(listener)
+      return () => listeners.delete(listener)
+    },
+    /** 停掉轮询与宿主订阅，清空订阅者。 */
+    dispose() {
+      stop()
+      if (offService !== null) {
+        try {
+          offService()
+        } catch {
+          // 退订失败不影响卸载。
+        }
+        offService = null
+      }
+      listeners.clear()
+    }
+  }
+}

@@ -18,7 +18,8 @@ DSH（DeepSeek Harness）左侧栏的「日期视图」插件：把会话列表�
 - **整体缩放**：4 个固定档位（80% / 100% / 125% / 150%）+ 自定义数字框（60% ~ 200%），做法与
   `dsh-claude-style` 的整页缩放一致（详见「整页缩放」）。
 - **设置进官方设置页**：三张卡片（日期视图、屏蔽工作区、整体缩放）注册成官方设置页的一个 section，不是自建浮层。
-- **随界面语言**：段落标题与设置页文案跟随宿主语言（中文 / 英文）。
+- **随界面语言**：段落标题与设置页文案跟随宿主语言（中文 / 英文）。宿主语言比插件晚就绪
+  或中途切换时会自动跟上（订阅 locale 服务快照 + 短暂轮询兜底，见 `src/locale.js`）。
 
 ![官方设置页里的「侧栏设置」](docs/screenshot-settings.png)
 
@@ -111,7 +112,7 @@ npm run watch     # 持续构建
 | `src/settings-section.js` | 注册进官方设置页的 section 组件（日期视图 / 屏蔽工作区 / 缩放） |
 | `src/open-settings.js` | 齿轮：打开官方设置页并跳到本插件那一页 |
 | `src/settings.js` | localStorage 读写与订阅 |
-| `src/locale.js` | 语言判定（读 locale 服务的 `active` 字段）与文案 |
+| `src/locale.js` | 语言源（`createLocale`：读 locale 服务 `active`，订阅变化 + 轮询兜底）与文案 |
 | `src/coexist.js` | 主题检测（只看公开痕迹） |
 | `src/styles.js` | 插件自带样式（自有节点 + 整页缩放规则） |
 
@@ -133,7 +134,7 @@ env -u all_proxy -u ALL_PROXY -u http_proxy -u HTTP_PROXY -u https_proxy -u HTTP
 
 现成的探针：`.debug/eval-solo.js`（无主题：日期视图进出）、`.debug/eval-zoom.js`（两种宿主的整页缩放）、
 `.debug/eval-section-flow.js`（无主题的设置页全流程）、`.debug/eval-theme-notice.js`（有主题：设置页只剩说明）、
-`.debug/test-locale.mjs`（语言判定单测，`node` 直接跑）。
+`.debug/test-locale.mjs` / `.debug/test-locale-live.mjs`（语言判定与热切换单测，`node` 直接跑）。
 
 注意：token 一次性，每轮验证都要重启服务拿新 URL；环境里的 socks5 代理会掐断 WebSocket，必须
 `env -u` 掉那几个变量。

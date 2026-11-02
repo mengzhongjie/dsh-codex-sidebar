@@ -33,14 +33,16 @@ function createIconButton(label, svg) {
  * @param hostData   宿主数据（判断有没有会话在跑）
  * @param onToggle   铃铛切换后的回调（用于持久化开关）
  * @param openSettings 齿轮点击
- * @param labels     按钮文案（中文/英文）
- * @param showBell   是否显示铃铛（主题接管时只留齿轮）
+ * @param getLabels  取按钮文案的函数（宿主语言可能晚就绪，每次用都重新问）
+ * @param showBell   是否显示铃铛（主题在场时只留齿轮）
  */
-export function createTopbar({ dateView, openSettings, hostData, onToggle, labels, showBell = true }) {
+export function createTopbar({ dateView, openSettings, hostData, onToggle, getLabels, showBell = true }) {
   /** 顶行动作区容器（挂上后一直复用）。 */
   let actions = null
   /** 铃铛节点：精简形态下为 null。 */
   let bell = null
+  /** 齿轮节点：挂载后一直复用（改语言时要更新它的 aria-label）。 */
+  let gear = null
   /** 铃铛旁的小绿点。 */
   let dot = null
   /** 当前是否要显示铃铛（设置变化时可能翻转，需要重建节点）。 */
@@ -64,7 +66,7 @@ export function createTopbar({ dateView, openSettings, hostData, onToggle, label
 
   /** 造铃铛节点并接上事件。 */
   function createBell() {
-    const button = createIconButton(labels.toggleDateView, BELL_SVG)
+    const button = createIconButton(getLabels().toggleDateView, BELL_SVG)
     button.addEventListener('click', event => {
       event.preventDefault()
       event.stopPropagation()
@@ -115,7 +117,8 @@ export function createTopbar({ dateView, openSettings, hostData, onToggle, label
     actions.className = 'codex-sidebar-actions'
     actions.setAttribute(OWN_ATTR, '')
 
-    const gear = createIconButton(labels.sidebarSettings, GEAR_SVG)
+    // 齿轮的说明文字与设置页标题同源（labels.settingsTitle），不另起一个键。
+    gear = createIconButton(getLabels().settingsTitle, GEAR_SVG)
     gear.addEventListener('click', event => {
       event.preventDefault()
       event.stopPropagation()
@@ -131,13 +134,27 @@ export function createTopbar({ dateView, openSettings, hostData, onToggle, label
     return true
   }
 
+  /** 语言变了：把两个按钮的 aria-label / title 换成新文案。 */
+  function refreshLabels() {
+    const next = getLabels()
+    if (bell !== null) {
+      bell.setAttribute('aria-label', next.toggleDateView)
+      bell.setAttribute('title', next.toggleDateView)
+    }
+    if (gear !== null) {
+      gear.setAttribute('aria-label', next.settingsTitle)
+      gear.setAttribute('title', next.settingsTitle)
+    }
+  }
+
   /** 卸载顶行动作区。 */
   function unmount() {
     actions?.remove()
     actions = null
     bell = null
+    gear = null
     dot = null
   }
 
-  return { mount, unmount, refreshBell, setShowBell }
+  return { mount, unmount, refreshBell, refreshLabels, setShowBell }
 }

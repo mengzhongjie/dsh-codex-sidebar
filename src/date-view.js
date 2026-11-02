@@ -45,6 +45,13 @@ function createHeader(text) {
 }
 
 export function createDateView({ hostData, viewStore, locale, refreshBell, prepareEnable, afterDisable }) {
+  /**
+   * 取当前用词表。
+   *
+   * locale 既可以是语言串，也可以是一个函数：宿主的语言可能比插件晚就绪，
+   * 由调用方每次重排时重新问一遍（见 locale.js 的 createLocale）。
+   */
+  const readCopy = () => labelsFor(typeof locale === 'function' ? locale() : locale)
   /** 日期视图是否开着。 */
   let active = false
 
@@ -65,9 +72,6 @@ export function createDateView({ hostData, viewStore, locale, refreshBell, prepa
 
   /** 合并多次触发的调度句柄。 */
   let frameHandle = 0
-
-  /** 用词表：语言由调用方在 apply 时判定一次。 */
-  const copy = labelsFor(locale)
 
   /** 是否处于日期视图。 */
   function isActive() {
@@ -112,6 +116,7 @@ export function createDateView({ hostData, viewStore, locale, refreshBell, prepa
 
     applying = true
     try {
+      const copy = readCopy()
       const settings = readSettings()
       const skip = new Set(settings.skipWorkspaces)
       const titles = hostData.workspaceTitleBySession()

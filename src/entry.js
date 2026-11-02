@@ -28,7 +28,7 @@ import {
 } from './constants.js'
 import { readSettings, writeSettings, subscribeSettings } from './settings.js'
 import { createHostData } from './host-data.js'
-import { resolveLocale, labelsFor, hostLocaleText } from './locale.js'
+import { createLocale } from './locale.js'
 import { themePresent } from './coexist.js'
 import { createViewStore } from './view-store.js'
 import { createDateView } from './date-view.js'
@@ -85,13 +85,13 @@ function applyZoom(zoom, enabled) {
  * id 必须自取：复用宿主 id 会顶掉它自己的页面。label 允许是 thunk，每次投影重读。
  * 注册失败只是少一页设置，不能影响侧栏本身，所以整段包在 try 里。
  */
-function registerSettingsSection(ctx, { hostData, copy, disposers }) {
+function registerSettingsSection(ctx, { hostData, localeState, disposers }) {
   const slots = ctx.slots ?? (typeof ctx.get === 'function' ? ctx.get('slots') : undefined)
   if (slots === undefined || slots === null || typeof slots.inject !== 'function' || typeof slots.register !== 'function') {
     console.warn(`${LOG_PREFIX} 宿主没有 slots 服务，跳过设置页注册`)
     return
   }
-  const SettingsSection = createSettingsSection({ hostData, copy })
+  const SettingsSection = createSettingsSection({ hostData, localeState })
   try {
     const dispose = slots.inject('settings.section', () =>
       slots.register(
@@ -101,7 +101,8 @@ function registerSettingsSection(ctx, { hostData, copy, disposers }) {
           id: 'codex-sidebar',
           // 排在「Agent 预设」(20) 与 Claude Style(22) 之后。
           order: 24,
-          label: () => copy.settingsTitle
+          // 每次投影重读：宿主语言晚就绪或中途切换时，导航标签跟着变。
+          label: () => localeState.get().settingsTitle
         },
         SettingsSection
       )
@@ -127,9 +128,10 @@ function applyUnsafe(ctx) {
   const disposers = []
   disposers.push(mountStyles())
 
-  // 界面语言只判定一次：段落标题、设置页、无主题时的按钮都跟着它走。
-  const locale = resolveLocale(ctx)
-  const copy = labelsFor(locale)
+  // 界面语言交给一个会自己更新的源：宿主 locale 服务常常比插件晚就绪
+  // （桌面 App 实测：apply 时读到 en，设置页因此整页英文，而宿主导航是中文）。
+  const localeState = createLocale(ctx)
+  disposers.push(() => localeState.dispose())
 
   const hostData = createHostData(ctx)
   const viewStore = createViewStore(ctx)
@@ -143,21 +145,22 @@ function applyUnsafe(ctx) {
   const dateView = createDateView({
     hostData,
     viewStore,
-    locale,
+    // 传函数：每次重排都重新问当前语言，切换语言后标题文字立即跟上。
+    locale: () => localeState.language(),
     refreshBell: () => topbar?.refreshBell()
   })
 
   // 设置界面直接住进官方设置页，不再自己画浮层。
-  registerSettingsSection(ctx, { hostData, copy, disposers })
+  registerSettingsSection(ctx, { hostData, localeState, disposers })
 
   topbar = createTopbar({
     dateView,
     hostData,
-    labels: { toggleDateView: copy.toggleDateView, sidebarSettings: copy.settingsTitle },
+    getLabels: () => localeState.get(),
     onToggle: active => writeSettings({ dateViewEnabled: active }),
     // 齿轮：打开官方设置页并切到本插件那一页。
     openSettings: () => {
-      openOfficialSettings(copy).catch(() => {
+      openOfficialSettings(localeState.get()).catch(() => {
         // 宿主结构变了找不到入口：静默失败，别把用户的点击变成报错。
       })
     }
@@ -284,6 +287,13 @@ function applyUnsafe(ctx) {
     }
   })
 
-  const hostLocale = hostLocaleText(ctx)
-  console.log(`${LOG_PREFIX} applied (${locale}${hostLocale ? `, host ${hostLocale}` : ''})`)
+  // 语言变化：日志留痕 + 顶行按钮文案 + 日期标题（等下一帧重排时更换）。
+  disposers.push(localeState.subscribe((next, nextLabels) => {
+    console.log(`${LOG_PREFIX} locale → ${next} (${nextLabels.today})`)
+    topbar?.refreshLabels()
+    dateView.schedule()
+  }))
+
+  const hostLocale = localeState.raw()
+  console.log(`${LOG_PREFIX} applied (${localeState.language()}${hostLocale ? `, host ${hostLocale}` : ''})`)
 }

@@ -1,6 +1,6 @@
 # 交接：dsh-codex-sidebar
 
-> 最近更新：2026-11-02（缩整改成与 dsh-claude-style 同款样式表做法；主题在场时整体让位）。
+> 最近更新：2026-11-02（语言改成会自己更新的源：宿主语言晚就绪 / 中途切换都能跟上）。
 
 ## 目标与验收标准
 
@@ -18,6 +18,8 @@
 - 样式对齐宿主 token（浅色/深色、与原生按钮/标签同尺寸）—— 完成；
 - **整页缩放改成 `dsh-claude-style` 同款**（样式表 `zoom` + 页面尺寸变量 + 弹窗封顶，不写行内 `zoom`）—— 完成并实测；
 - **语言判定改为读 locale 服务的 `active` 字段** —— 中文宿主显示中文设置页，单测 5/5；
+- **语言改成响应式源 `createLocale`**（订阅 locale 服务快照 + 最多 30 秒轮询兜底，`get()` 每次现取）
+  —— 修掉真实 App 设置页整页英文（宿主导航中文）的问题，热切换实测通过；
 - **共存策略收缩为 `solo` / `dormant` 两种**：检测到主题就只挂齿轮、不碰列表、不写缩放标记（接管模式已删除）—— 完成并实测；
 - 已装进用户的 `desktop` profile（`node scripts/install.mjs --profile desktop`，备份在
   `~/.dsh/backups/desktop-codex-sidebar-20261102-134412/`）—— 待用户 Cmd+Q 重开后确认；
@@ -44,6 +46,12 @@
    `display`、抢 `groupBy`。用户的诉求也是「关闭对 claudestyle 的修改」。
 8. **语言判定读 locale 服务的 `active` 字段**（先服务对象、再 `getSnapshot()`），取不到才退回
    `documentElement.lang` / `navigator.language`。主题同样读 `active`，这是中文宿主上设置页仍显示英文的根因。
+9. **语言必须是「活的」而不是 apply 时判一次**。根因：宿主把语言选择存在 Host 用户设置文档
+   （namespace `locale`、字段 `preference`），客户端 locale 服务要先 `adopt()` 那份文档，插件 apply
+   时常常还读到浏览器推导的 `en`（实测启动日志 `applied (en, host en)`，约 500ms 后才切中文）。
+   做法（`src/locale.js` 的 `createLocale`）：`get()/language()` 每次现取；绑定 locale 服务的
+   `subscribe`（快照变化即刷新）；服务晚注册时用 500ms 轮询兜底（最多 60 次），绑上且读到宿主值就停；
+   语言变化时通知订阅者 → 顶行按钮 aria-label、日期标题、设置页正文与导航标签一起换。
 
 ## 验证证据（真实页面，Playwright headless，1440×900）
 
@@ -69,17 +77,27 @@
 - 控制台只有 `[codex-sidebar] applied (en, host en)`；`dsh-better-sidebar` 的
   `panel host geometry mismatch` 警告来自主题自己的 pageZoom，与本插件无关。
 
+### 语言热切换（profile `codexprobe`，宿主设置里把 English 换成中文）
+
+- 启动日志 `applied (en, host en)`（与真实 App 同症状）→ 约 500ms 后 `locale → zh (今天)`；
+- 切换时设置页开着：导航立刻变成 `账号与余额 / 通用设置 / 模型 / 内置插件 / Agent 预设 / 侧栏设置`，
+  本页正文变中文，齿轮 aria-label 变「侧栏设置」；
+- 日期视图：标题 `今天 / 昨天 / 星期六 / 星期五 / 星期二 / 更早`，铃铛 aria-label「日期视图」；
+- 重启后再看：启动就是中文（宿主已 adopt 偏好），设置页 3 张卡片全中文。
+
 ### 单元测试
 
 `.debug/test-locale.mjs`：5/5 通过（服务 `active`=zh-CN→zh、en-US→en、服务对象 `locale` 字段→zh、
 无服务退回 html lang、服务抛错不崩），中文标签「今天 / 星期六」。
+`.debug/test-locale-live.mjs`：16/16 通过（晚就绪的服务、订阅式服务快照变化、绑定后跟随、
+`dispose` 后停止轮询并退订）。
 
 截图：`docs/screenshot-date-view.png`、`docs/screenshot-settings.png`、`docs/screenshot-theme-notice.png`。
 
 ## 未验证 / 限制
 
 - **真实桌面 App 里还没确认**：新 bundle 需要用户 **Cmd+Q** 退出后重开才装载；重开后应看到
-  齿轮→中文「侧栏设置」、主题在场时只有说明、不再有空白带与光标偏移。
+  齿轮→中文「侧栏设置」、主题在场时只有说明（应为中文）、不再有空白带与光标偏移。
 - 主题在场时本插件不提供日期视图与缩放（主题已内置）；想用本插件的日期视图需先停用主题。
 - 用户主题还开着 `pageZoom=115`，`dsh-better-sidebar` 仍会报 degraded viewport sync（主题缩放导致，非本插件引入）。
 - 折叠成图标栏时不挂按钮；归档视图打开时不进入日期视图（宿主会整体换列表）。

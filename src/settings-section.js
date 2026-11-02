@@ -70,11 +70,12 @@ function SwitchRow({ title, desc, checked, onChange }) {
 /**
  * 造出设置页组件。
  *
- * @param hostData - 宿主数据（工作区标题来自工作区快照）
- * @param copy     - 当前语言的文案表
+ * @param hostData    - 宿主数据（工作区标题来自工作区快照）
+ * @param localeState - 语言源（见 locale.js 的 createLocale）：宿主语言可能晚就绪，
+ *                      这一页要在语言变化后重渲，否则中文 App 里会一直是英文
  * @returns 可直接交给 slots.register 的 React 组件
  */
-export function createSettingsSection({ hostData, copy }) {
+export function createSettingsSection({ hostData, localeState }) {
   /**
    * 复选框的来源：当前所有工作区标题 ∪ 已被屏蔽的标题。
    * 后者必须保留：工作区被删掉或改名后，用户仍然需要能取消勾选。
@@ -97,8 +98,13 @@ export function createSettingsSection({ hostData, copy }) {
     const [titles, setTitles] = useState(() => titlesFor(readSettings()))
     // 缩放输入框单独存草稿：直接绑到设置上，手打「1」会被立刻夹到下限。
     const [zoomDraft, setZoomDraft] = useState(() => String(Math.round(readSettings().zoom * 100)))
+    // 语言变化时只用来触发重渲：真实文案每次渲染时现取。
+    const [, setLanguageTick] = useState(0)
+    const copy = localeState.get()
 
     useEffect(() => {
+      // 宿主的语言晚就绪 / 中途切换：重渲一次，文案与导航标签都会跟着变。
+      const offLocale = localeState.subscribe(() => setLanguageTick(tick => tick + 1))
       // 设置变化：本页其他行与顶行铃铛都会写设置，这里跟着刷新。
       const offSettings = subscribeSettings(next => {
         setSettings(next)
@@ -110,6 +116,7 @@ export function createSettingsSection({ hostData, copy }) {
       return () => {
         offSettings()
         offData()
+        offLocale()
       }
     }, [])
 
