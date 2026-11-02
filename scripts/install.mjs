@@ -96,7 +96,7 @@ function editPatch(install) {
   let text = fs.existsSync(file) ? fs.readFileSync(file, 'utf8') : ''
   const has = text.includes(`id: ${ENTRY_ID}`)
   if (install && !has) {
-    text = text.trimEnd() + `\n\n# ${PACKAGE}：把侧栏换成 Codex 风格（按日期排列 + 铃铛开关 + 设置面板）\n- insert:\n    - id: ${ENTRY_ID}\n      name: '${PACKAGE}'\n`
+    text = text.trimEnd() + `\n\n# ${PACKAGE}：把侧栏换成 Codex 风格（按日期排列 + 铃铛开关 + 官方设置页里的「侧栏设置」）\n- insert:\n    - id: ${ENTRY_ID}\n      name: '${PACKAGE}'\n`
   }
   if (!install && has) {
     // 整段（注释行 + insert 段）一起摘掉：只删 id 行会留下空 insert，Loader 会报错。
