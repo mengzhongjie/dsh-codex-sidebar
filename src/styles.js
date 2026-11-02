@@ -115,7 +115,7 @@ body[data-codex-sidebar] :is(dialog, [role="dialog"]) {
  * 所以用 12px/600、宿主次级文字色 + 55% 不透明，左内边距与行内容对齐（8），不再多缩进 6px。
  */
 .codex-sidebar-date-header {
-  padding: 10px 4px 4px;
+  padding: 12px 4px 6px;
   font-size: 12px;
   font-weight: 600;
   line-height: 1.4;
@@ -142,6 +142,75 @@ body[data-codex-sidebar] :is(dialog, [role="dialog"]) {
   overflow: hidden;
   text-overflow: ellipsis;
   user-select: none;
+}
+
+/*
+ * 消息视图的两行式会话行（Codex 那种聊天列表）。
+ *
+ * 宿主行本来是单行 flex：图标槽 + 标题 + 时间 + 我们的标签 + 操作组。
+ * 改成可换行后，把「最新消息预览」作为行尾的 flex-basis:100% 节点放到第二行，
+ * 行高改为自适应；时间在消息视图里已经被隐藏，第一行只剩图标 + 标题 + 标签。
+ */
+[data-codex-sidebar-date-view] [data-row-key^="session:"] {
+  flex-wrap: wrap;
+  height: auto;
+  min-height: 32px;
+  row-gap: 1px;
+  padding-top: 6px;
+  padding-bottom: 6px;
+}
+
+/*
+ * 第二行：这段对话最后说的话。
+ * 与标题文字左对齐（图标槽 16px + 间隙 8px），最多两行，超出省略；
+ * pointer-events: none 让它不抢走整行的点击与悬停。
+ */
+.codex-sidebar-preview {
+  flex: 0 0 100%;
+  min-width: 0;
+  padding-left: 20px;
+  font-size: 12px;
+  line-height: 1.45;
+  letter-spacing: 0;
+  color: var(--dsw-alias-label-primary, inherit);
+  opacity: 0.55;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  white-space: pre-wrap;
+  word-break: break-word;
+  user-select: none;
+  pointer-events: none;
+}
+
+/*
+ * 悬停：工作区小字退场，标题拿到整行宽度。
+ * Codex 的会话列表也是这么做的——悬停时把注意力收回到会话本身。
+ */
+[data-codex-sidebar-date-view] [data-row-key^="session:"]:hover .codex-sidebar-chip {
+  display: none;
+}
+
+/*
+ * 标题过长时悬停横向滑动，露出被省略号吃掉的尾巴。
+ * 位移由 date-view.js 现量后写进 --codex-sidebar-marquee-shift：
+ * 标题宽度随窗口与缩放变化，写死距离会滑多或滑不到。
+ */
+.codex-sidebar-marquee {
+  overflow: visible !important;
+  text-overflow: clip !important;
+  animation: codex-sidebar-marquee 4.2s ease-in-out infinite alternate;
+}
+
+@keyframes codex-sidebar-marquee {
+  from {
+    transform: translateX(0);
+  }
+  to {
+    transform: translateX(var(--codex-sidebar-marquee-shift, 0px));
+  }
 }
 
 /*

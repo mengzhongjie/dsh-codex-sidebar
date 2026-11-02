@@ -133,3 +133,11 @@
 - 完成：首段改名（今天 → 优先级 / Today → Priority）；修复日期视图悬停抖动（标题节点复用 + 只比自有节点相对顺序 + display 幂等 + 观察者跳过自写变动）。
 - 验证：`.debug/hover.mjs` 实测 codexprobe 0 次 DOM 变动、desktopmirror（含主题）1 次，deltas 全 0；日期标题 [优先级, 昨天, 星期六, 星期五, 星期二, 更早]。
 - 未验证：真实 desktop App 需用户 Cmd+Q 重开后确认（本轮只跑 web 镜像 profile）。
+
+## 2026-11-02 消息视图（本轮）
+
+- 用户四条：改名消息视图、悬停滑动 + 隐藏工作区小字 + 最新消息预览、取消缩放与设置按钮、确认 agent.md。
+- 改动文件：`src/locale.js`（消息视图文案）、`src/topbar.js`（删齿轮，只留铃铛）、`src/settings-section.js`（删缩放卡片）、`src/entry.js`（删 openOfficialSettings 与 zoom.start；调试出口 `__codexSidebarDebug` 受 localStorage `dsh-codex-sidebar.debug` 控制）、`src/host-data.js`（`previewBySession()`）、`src/date-view.js`（`dressPreview`/`stripPreviews`/marquee/dispose，`titleNodeOf` 改为优先认 `[class*="_title"]`）、`src/styles.js`（两行式行、预览、悬停隐藏标签、marquee 动画、标题间距）。
+- 关键数据源：`sessions` 快照 `projectionsBySession[id].values.turnOutline` 的最后一轮（`response` 优先，空则 `prompt`）。`window.__DSH_BOOT__` 不含 ctx，取不到。
+- 验证：codexprobe 上 21 行可见、20 行带预览、悬停 `marquee=1` 且标签隐藏、关闭后完全还原（标题 0 / 预览 0 / 工作区行 9）。脚本 `.debug/final-check.mjs`、`.debug/metrics.mjs`、`.debug/marquee.mjs`。
+- 未做：真实 desktop App 仍需 Cmd+Q 重开验证；主题共存（dormant 模式）下未跑本轮预览的回归。

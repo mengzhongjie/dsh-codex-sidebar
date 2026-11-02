@@ -17,8 +17,6 @@ const MIN_SIDEBAR_WIDTH = 140
 /** 铃铛图标（描边风格，跟随 currentColor）。 */
 const BELL_SVG = `<svg viewBox="0 0 16 16" width="15" height="15" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3.9 6.6a4.1 4.1 0 0 1 8.2 0c0 2 .5 3.2 1.1 4 .3.4 0 .9-.5.9H3.3c-.5 0-.8-.5-.5-.9.6-.8 1.1-2 1.1-4Z"/><path d="M6.4 13.2a1.8 1.8 0 0 0 3.2 0"/></svg>`
 
-/** 齿轮图标。 */
-const GEAR_SVG = `<svg viewBox="0 0 16 16" width="15" height="15" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="8" cy="8" r="1.9"/><path d="M8 1.9v1.6M8 12.5v1.6M2.6 8h1.5M11.9 8h1.5M3.9 3.9l1.1 1.1M11 11l1.1 1.1M12.1 3.9 11 5M5 11l-1.1 1.1"/></svg>`
 
 /** 建一个图标按钮。 */
 function createIconButton(label, svg) {
@@ -36,7 +34,6 @@ function createIconButton(label, svg) {
  * @param dateView   日期视图控制器
  * @param hostData   宿主数据（判断有没有会话在跑）
  * @param onToggle   铃铛切换后的回调（用于持久化开关）
- * @param openSettings 齿轮点击
  * @param getLabels  取按钮文案的函数（宿主语言可能晚就绪，每次用都重新问）
  * @param showBell   是否显示铃铛（默认显示；隐藏只用于临时调试）
  * @param onBellClick 外部接管铃铛点击：返回 true 表示已处理（有主题时委派给主题的铃铛）
@@ -44,7 +41,6 @@ function createIconButton(label, svg) {
  */
 export function createTopbar({
   dateView,
-  openSettings,
   hostData,
   onToggle,
   onBellClick,
@@ -56,8 +52,6 @@ export function createTopbar({
   let actions = null
   /** 铃铛节点：精简形态下为 null。 */
   let bell = null
-  /** 齿轮节点：挂载后一直复用（改语言时要更新它的 aria-label）。 */
-  let gear = null
   /** 铃铛旁的小绿点。 */
   let dot = null
   /** 当前是否要显示铃铛（设置变化时可能翻转，需要重建节点）。 */
@@ -101,7 +95,7 @@ export function createTopbar({
     return button
   }
 
-  /** 按当前模式显示或去掉铃铛（齿轮始终在）。 */
+  /** 按当前模式显示或去掉铃铛。 */
   function applyBellVisibility() {
     if (actions === null) return
     if (bellWanted && bell === null) {
@@ -154,14 +148,7 @@ export function createTopbar({
     // 顶行那份要靠右推（宿主那一行左边有品牌）；工作区行本身已靠右，不需要。
     actions.classList.toggle('codex-sidebar-actions-top', workspaceBar === null)
 
-    // 齿轮的说明文字与设置页标题同源（labels.settingsTitle），不另起一个键。
-    gear = createIconButton(getLabels().settingsTitle, GEAR_SVG)
-    gear.addEventListener('click', event => {
-      event.preventDefault()
-      event.stopPropagation()
-      openSettings()
-    })
-    actions.replaceChildren(gear)
+    actions.replaceChildren()
 
     if (workspaceBar !== null) {
       // 工作区行：排在宿主的图标组前面（标签 → 铃铛/齿轮 → 搜索 → 视图选项 → 新建工作区）。
@@ -189,10 +176,6 @@ export function createTopbar({
       bell.setAttribute('aria-label', next.toggleDateView)
       bell.setAttribute('title', next.toggleDateView)
     }
-    if (gear !== null) {
-      gear.setAttribute('aria-label', next.settingsTitle)
-      gear.setAttribute('title', next.settingsTitle)
-    }
   }
 
   /** 卸载顶行动作区。 */
@@ -202,7 +185,6 @@ export function createTopbar({
     document.body.removeAttribute(BELL_ATTR)
     actions = null
     bell = null
-    gear = null
     dot = null
   }
 

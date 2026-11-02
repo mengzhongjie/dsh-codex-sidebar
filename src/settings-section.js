@@ -8,11 +8,11 @@
  * 版式对齐官方设置页：内容列已经带左右 24px 内边距，这里只画卡片与行，
  * 卡片 20px 圆角 + 发丝描边，行间 0.5px 分隔线。
  *
- * 装了 dsh-claude-style 时本插件让位：日期排列与页面缩放都由主题负责，
+ * 装了 dsh-claude-style 时本插件让位：消息排列由主题负责，
  * 这一页只说明现状，不提供会改动主题界面的开关。
+ * 缩放不是侧栏的职责，这一页不再提供缩放设置。
  */
 import { createElement as h, useEffect, useState } from 'react'
-import { ZOOM_RANGE, ZOOM_STEPS } from './constants.js'
 import { readSettings, subscribeSettings, writeSettings } from './settings.js'
 import { themePresent } from './coexist.js'
 
@@ -96,8 +96,6 @@ export function createSettingsSection({ hostData, localeState }) {
   function SettingsSection() {
     const [settings, setSettings] = useState(readSettings)
     const [titles, setTitles] = useState(() => titlesFor(readSettings()))
-    // 缩放输入框单独存草稿：直接绑到设置上，手打「1」会被立刻夹到下限。
-    const [zoomDraft, setZoomDraft] = useState(() => String(Math.round(readSettings().zoom * 100)))
     // 语言变化时只用来触发重渲：真实文案每次渲染时现取。
     const [, setLanguageTick] = useState(0)
     const copy = localeState.get()
@@ -109,7 +107,6 @@ export function createSettingsSection({ hostData, localeState }) {
       const offSettings = subscribeSettings(next => {
         setSettings(next)
         setTitles(titlesFor(next))
-        setZoomDraft(String(Math.round(next.zoom * 100)))
       })
       // 工作区增删：复选框列表跟着变。
       const offData = hostData.subscribe(() => setTitles(titlesFor(readSettings())))
@@ -128,17 +125,6 @@ export function createSettingsSection({ hostData, localeState }) {
       writeSettings({ skipWorkspaces: [...next] })
     }
 
-    /** 提交缩放输入框：非法值回填当前值，合法值夹进区间。 */
-    const commitZoom = () => {
-      const value = Number(zoomDraft)
-      if (!Number.isFinite(value) || value <= 0) {
-        setZoomDraft(String(Math.round(settings.zoom * 100)))
-        return
-      }
-      const zoom = Math.min(ZOOM_RANGE.max, Math.max(ZOOM_RANGE.min, value / 100))
-      writeSettings({ zoom })
-      setZoomDraft(String(Math.round(zoom * 100)))
-    }
 
     // 主题检测放在渲染期：用户可能在别的页面停用主题，下次进设置页就能看到开关。
     if (themePresent()) {
@@ -204,55 +190,7 @@ export function createSettingsSection({ hostData, localeState }) {
 
       // 卡片三：整体缩放。档位与 dsh-claude-style 的页面缩放一致（80/100/125/150），
       // 另给自定义输入；缩放方式见 constants.js 里的 ZOOM_* 说明。
-      h(
-        'div',
-        { className: 'codex-sidebar-settings-card' },
-        h(
-          'div',
-          { className: 'codex-sidebar-settings-heading' },
-          h(TextBlock, { title: copy.zoomSection, desc: copy.zoomHint })
-        ),
-        h(
-          'div',
-          { className: 'codex-sidebar-settings-zoom-row' },
-          h(
-            'div',
-            { className: 'codex-sidebar-zoom' },
-            h(
-              'div',
-              { className: 'codex-sidebar-zoom-steps' },
-              ZOOM_STEPS.map(step =>
-                h(
-                  'button',
-                  {
-                    key: step,
-                    type: 'button',
-                    className: 'codex-sidebar-zoom-step',
-                    'data-selected': Math.abs(settings.zoom - step) < 0.001,
-                    onClick: () => writeSettings({ zoom: step })
-                  },
-                  Math.round(step * 100) + '%'
-                )
-              )
-            ),
-            h('input', {
-              className: 'codex-sidebar-zoom-input',
-              type: 'number',
-              min: Math.round(ZOOM_RANGE.min * 100),
-              max: Math.round(ZOOM_RANGE.max * 100),
-              step: 5,
-              'aria-label': copy.zoomCustom,
-              title: copy.zoomCustomHint,
-              value: zoomDraft,
-              onChange: event => setZoomDraft(event.target.value),
-              onBlur: commitZoom,
-              onKeyDown: event => {
-                if (event.key === 'Enter') commitZoom()
-              }
-            })
-          )
-        )
-      )
+      
     )
   }
 

@@ -63,6 +63,32 @@ export function createHostData(ctx) {
       return (snapshot.ids ?? []).some(id => snapshot.byId?.[id]?.running === true)
     },
 
+    /**
+     * 会话 id → 最新一条消息的预览文本。
+     *
+     * 数据来自 sessions 快照里的投影 projectionsBySession[id].values.turnOutline：
+     * 每轮一个 { turn, seq, prompt, response }，response 是该轮助手的最终回复。
+     * 用快照而不是按会话拉历史——侧栏一次要画几十行，逐会话请求代价太高，
+     * 而这份投影宿主本来就已经同步到客户端了。
+     * 最新一轮 response 为空（正在跑 / 被中断）时退回用 prompt，保证每行都有字。
+     */
+    previewBySession() {
+      const previews = new Map()
+      const snapshot = this.sessionSnapshot()
+      const projections = snapshot.projectionsBySession ?? {}
+      for (const id of snapshot.ids ?? []) {
+        const values = projections[id]?.values
+        const outline = values?.turnOutline
+        if (!Array.isArray(outline) || outline.length === 0) continue
+        const last = outline[outline.length - 1] ?? {}
+        const response = typeof last.response === 'string' ? last.response.trim() : ''
+        const prompt = typeof last.prompt === 'string' ? last.prompt.trim() : ''
+        const text = response !== '' ? response : prompt
+        if (text !== '') previews.set(id, text)
+      }
+      return previews
+    },
+
     /** 会话 id → 工作区标题；未分组会话不在映射里。 */
     workspaceTitleBySession() {
       const titles = new Map()

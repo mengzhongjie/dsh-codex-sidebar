@@ -25,7 +25,6 @@ import { createPortalFit } from './portal-fit.js'
 import { createViewStore } from './view-store.js'
 import { createDateView } from './date-view.js'
 import { createSettingsSection } from './settings-section.js'
-import { openOfficialSettings } from './open-settings.js'
 import { createTopbar } from './topbar.js'
 import { mountStyles } from './styles.js'
 import { findSidebar } from './sidebar-dom.js'
@@ -92,6 +91,20 @@ function applyUnsafe(ctx) {
   const localeState = createLocale(ctx)
   disposers.push(() => localeState.dispose())
 
+  /**
+   * 调试出口：localStorage 里的 DEBUG_KEY 置 1 时，把 ctx 与部件挂到 window 上。
+   *
+   * 只在开发期用来在页面控制台里观察宿主服务形状（例如给「最新消息预览」找数据源），
+   * 正常使用不会产生任何全局变量。
+   */
+  try {
+    if (window.localStorage.getItem('dsh-codex-sidebar.debug') === '1') {
+      window.__codexSidebarDebug = { ctx, readSettings, writeSettings }
+    }
+  } catch {
+    // localStorage 不可用（隐私模式）时静默跳过
+  }
+
   const hostData = createHostData(ctx)
   const viewStore = createViewStore(ctx)
   // 缩放控制器：桌面 App 会走宿主半边的窗口级 page zoom，网页版退回页面 CSS。
@@ -135,28 +148,16 @@ function applyUnsafe(ctx) {
       if (trigger === null) return dateView.isActive()
       return trigger.getAttribute('aria-pressed') === 'true'
     },
-    // 齿轮：打开官方设置页并切到本插件那一页。
-    openSettings: () => {
-      openOfficialSettings(localeState.get()).catch(() => {
-        // 宿主结构变了找不到入口：静默失败，别把用户的点击变成报错。
-      })
-    }
   })
 
   /**
-   * 按当前模式落地设置里的倍率。
+   * 缩放不再由侧栏负责。
    *
-   * solo：用我们的缩放（窗口级优先）；dormant：主题有自己的 pageZoom，我们撤干净，
-   * 免得两套缩放相乘，把宿主弹层顶出窗口。
+   * 早先本插件在 body 上做页面缩放，并给 body 上的浮层做坐标补偿；那套做法在桌面 App 里
+   * 与主题、better-sidebar 的浮层反复打架。现在侧栏不再提供缩放入口，这里只负责把历史
+   * 版本留下的缩放痕迹清干净（body 上的 zoom 与浮层补偿属性）。
    */
   function applyZoomFromSettings() {
-    if (mode === 'solo') {
-      zoom.apply(readSettings().zoom)
-      // 只有「页面 CSS 缩放」这条路线需要给 body 上的浮层补放大；
-      // 窗口级缩放是浏览器自己做的，页面里再加一层就会放大两次。
-      applyPortalFit(readSettings().zoom, zoom.mode !== 'window')
-      return
-    }
     zoom.reset()
     portalFit.apply(1)
   }
@@ -214,6 +215,7 @@ function applyUnsafe(ctx) {
 
       if (next === 'dormant') {
         if (dateView.isActive()) dateView.disable()
+    dateView.dispose()
         if (settings.dateViewEnabled) writeSettings({ dateViewEnabled: false })
         return
       }
@@ -291,11 +293,7 @@ function applyUnsafe(ctx) {
     // 探测宿主能不能做窗口级缩放，再把设置里的倍率落地。
     // 主页面的缩放一旦由窗口接管，better-sidebar 那类挂在 body 上的面板才会跟着一起放大。
     portalFit.start()
-    zoom.start().then(route => {
-      applyZoomFromSettings()
-      console.log(`${LOG_PREFIX} zoom route → ${route}`)
-    })
-  }, 200)
+    }, 200)
 
   // 卸载：把所有改动还原，宿主恢复到装插件之前的样子。
   ctx.effect(() => () => {

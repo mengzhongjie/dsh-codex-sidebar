@@ -99,3 +99,9 @@ env -u all_proxy -u ALL_PROXY -u http_proxy -u HTTP_PROXY -u https_proxy -u HTTP
 - 区分「源码改了 / 构建成功 / 页面里生效 / 真机 App 生效」四档，交付时说清到哪一档。
 - 页面验证一律用 headless Playwright + 真实鼠标事件（DOM .click() 会绕过宿主的合成事件逻辑，容易误判）。
 - 改完先跑 `.debug/verify.mjs` 的既有探针（eval-section-check / eval-solo / eval-locale-switch），再验新行为。
+
+## 2026-11-02 决策：消息视图（对齐 Codex）
+
+- 侧栏视图改名「消息视图」，预设避免叫「日期视图」——它的卖点是像收消息一样读会话，而不是按日期分组。
+- 每行第二行放「最新一条消息预览」，数据取 `sessions` 快照的 `turnOutline` 投影（宿主已同步），**不**逐会话拉历史：侧栏一次几十行，逐条请求的代价不可接受。
+- 缩放与设置齿轮移出侧栏：缩放属于宿主/整页层面，侧栏只管列表形态。

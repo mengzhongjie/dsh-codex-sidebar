@@ -17,6 +17,9 @@ const DAY_MS = 86400000
 /** 工作区标签的类名（标记为自有节点，退出时统一删）。 */
 const CHIP_CLASS = 'codex-sidebar-chip'
 
+/** 最新消息预览的类名（Codex 风格两行式会话行的第二行）。 */
+const PREVIEW_CLASS = 'codex-sidebar-preview'
+
 /** 把两个时间戳之间相差的「自然日」算出来（用 UTC 折算，避开夏令时 23/25 小时日）。 */
 function daysBetween(then, now) {
   const from = new Date(then)
@@ -67,6 +70,9 @@ export function createDateView({ hostData, viewStore, locale, refreshBell, prepa
   /** 自建行内标签，退出时统一删除。 */
   const chips = new Set()
 
+  /** 自建的最新消息预览行，退出时统一删除。 */
+  const previews = new Set()
+
   /** 重排进行中的重入标记：我们的写入会触发观察者，不加锁会自激。 */
   let applying = false
 
@@ -100,6 +106,107 @@ export function createDateView({ hostData, viewStore, locale, refreshBell, prepa
       chips.add(chip)
     }
     if (chip.textContent !== workspace) chip.textContent = workspace
+  }
+
+  /**
+   * 给一行补上「最新一条消息」的预览。
+   *
+   * Codex 的消息视图是两行式：第一行标题 + 工作区，第二行是这段对话最后说的话。
+   * 宿主行本身是单行 flex，样式表把行改成可换行、预览独占一行（flex-basis: 100%）。
+   * text 为空（这个会话还没有消息）时连节点一起撤掉，别留空行。
+   */
+  function dressPreview(row, text) {
+    if (row === null) return
+    const existing = row.querySelector(':scope > .' + PREVIEW_CLASS)
+    if (text === '') {
+      if (existing !== null) {
+        previews.delete(existing)
+        existing.remove()
+      }
+      return
+    }
+    if (existing !== null) {
+      if (existing.textContent !== text) existing.textContent = text
+      return
+    }
+    const preview = document.createElement('span')
+    preview.className = PREVIEW_CLASS
+    preview.setAttribute(OWN_ATTR, '')
+    preview.textContent = text
+    row.appendChild(preview)
+    previews.add(preview)
+  }
+
+  /** 删掉所有预览行（退出日期视图时）。 */
+  function stripPreviews() {
+    for (const preview of previews) preview.remove()
+    previews.clear()
+  }
+
+  /**
+   * 行标题节点。
+   *
+   * 宿主行结构是 [图标槽 _slot, 标题 _title, 时间 _time, 我们的标签, 操作组 _rowActions]，
+   * 直接取第一个孩子会拿到 16px 的图标槽（宽度恒定 → 永远不需要滑动），
+   * 所以优先认宿主的 _title 类名，认不到再按排除法兜底。
+   */
+  function titleNodeOf(row) {
+    const explicit = row.querySelector('[class*="_title"]')
+    if (explicit !== null) return explicit
+    for (const child of row.children) {
+      const className = typeof child.className === 'string' ? child.className : ''
+      if (className === CHIP_CLASS) continue
+      if (className.includes('_time') || className.includes('_slot') || className.endsWith('_rowActions')) continue
+      return child
+    }
+    return null
+  }
+
+  /**
+   * 悬停到行上：标题过长时让它横向滑动，露出被省略号吃掉的尾巴。
+   *
+   * 滑多远要现量（宽度随窗口与缩放变化），所以不在 arrange 时预算，只在这里量一次。
+   * 工作区小字由样式表在悬停时隐藏（见 styles.js），这里不管。
+   */
+  function startMarquee(row) {
+    const title = titleNodeOf(row)
+    if (title === null) return
+    const overflow = title.scrollWidth - title.clientWidth
+    if (overflow <= 4) return
+    title.style.setProperty('--codex-sidebar-marquee-shift', '-' + overflow + 'px')
+    title.classList.add('codex-sidebar-marquee')
+  }
+
+  /** 离开行：停下滑动并清掉内联变量。 */
+  function stopMarquee(row) {
+    const title = titleNodeOf(row)
+    if (title === null) return
+    title.classList.remove('codex-sidebar-marquee')
+    title.style.removeProperty('--codex-sidebar-marquee-shift')
+  }
+
+  /** 悬停事件交给 document 代理：座位会被宿主重建，逐个绑定留不住。 */
+  function onPointerOver(event) {
+    if (!active || !(event.target instanceof Element)) return
+    const row = event.target.closest('[data-row-key^="session:"]')
+    if (row === null) return
+    startMarquee(row)
+  }
+
+  function onPointerOut(event) {
+    if (!(event.target instanceof Element)) return
+    const row = event.target.closest('[data-row-key^="session:"]')
+    if (row === null) return
+    stopMarquee(row)
+  }
+
+  document.addEventListener('mouseover', onPointerOver, true)
+  document.addEventListener('mouseout', onPointerOut, true)
+
+  /** 卸载时撤掉悬停代理（entry 的 effect 会调用）。 */
+  function dispose() {
+    document.removeEventListener('mouseover', onPointerOver, true)
+    document.removeEventListener('mouseout', onPointerOut, true)
   }
 
   /** 删掉所有行内标签。 */
@@ -142,7 +249,7 @@ export function createDateView({ hostData, viewStore, locale, refreshBell, prepa
         // 正在运行的会话算作今天：它的更新时间可能很久之前，但用户现在在看它。
         const bucket = running ? { text: copy.today, rank: 0 } : bucketOf(time, now, copy)
         if (seat.style.display !== '') seat.style.display = ''
-        visible.push({ seat, row, time, running, bucket, workspace })
+        visible.push({ seat, row, sessionId, time, running, bucket, workspace })
       }
 
       // 2) 上一轮隐藏、这一轮可见的座位要恢复；反过来要隐藏。
@@ -161,8 +268,13 @@ export function createDateView({ hostData, viewStore, locale, refreshBell, prepa
         || Number(right.running) - Number(left.running)
         || right.time - left.time)
 
-      // 4) 行内标签（与排序无关，先补好再排 DOM）。
-      for (const item of visible) dressRow(item.row, item.workspace)
+      // 4) 行内标签与最新消息预览（与排序无关，先补好再排 DOM）。
+      //    预览文案来自会话投影里的最后一轮，宿主已经同步到客户端，不用额外请求。
+      const previewTexts = hostData.previewBySession()
+      for (const item of visible) {
+        dressRow(item.row, item.workspace)
+        dressPreview(item.row, previewTexts.get(item.sessionId) ?? '')
+      }
 
       // 5) 生成节点序列：段落变化处插标题。
       //    标题节点必须复用上一轮的同名节点：每轮都新建的话，下面的「顺序没变」判定永远是 false，
@@ -245,6 +357,7 @@ export function createDateView({ hostData, viewStore, locale, refreshBell, prepa
     for (const header of headers) header.remove()
     headers.clear()
     stripChips()
+    stripPreviews()
     for (const seat of hiddenSeats) seat.style.display = ''
     hiddenSeats.clear()
     viewStore.restore(previousGroupBy)
@@ -261,5 +374,5 @@ export function createDateView({ hostData, viewStore, locale, refreshBell, prepa
     else enable()
   }
 
-  return { isActive, enable, disable, toggle, schedule, arrange }
+  return { isActive, enable, disable, toggle, schedule, arrange, dispose }
 }
