@@ -6,7 +6,7 @@
  * 每一行补一个工作区标签（扁平后没有分组标题，靠标签回忆归属）。
  * 被屏蔽的工作区、未分组会话只隐藏不删除。退出时还原顺序、标签与分组方式。
  */
-import { DATE_MODE_ATTR, OWN_ATTR } from './constants.js'
+import { DATE_MODE_ATTR, OWN_ATTR, MARQUEE_CLASS } from './constants.js'
 import { labelsFor } from './locale.js'
 import { findFlatList, findSidebar, collectSeats, rowOfSeat, sessionIdOfRow } from './sidebar-dom.js'
 
@@ -18,6 +18,14 @@ const CHIP_CLASS = 'codex-sidebar-chip'
 
 /** 最新消息预览的类名（Codex 风格两行式会话行的第二行）。 */
 const PREVIEW_CLASS = 'codex-sidebar-preview'
+
+/**
+ * 滑动窗口右侧留的空隙。
+ *
+ * 滑到终点时最后一个字不该贴着行尾，留 10px 让「到头了」看得出来；
+ * 这个值同时写进样式表的 padding-right，量宽度时要一起减掉。
+ */
+const MARQUEE_TAIL_ROOM = 10
 
 /** 把两个时间戳之间相差的「自然日」算出来（用 UTC 折算，避开夏令时 23/25 小时日）。 */
 function daysBetween(then, now) {
@@ -162,26 +170,84 @@ export function createDateView({ hostData, viewStore, locale, refreshBell, prepa
   }
 
   /**
-   * 悬停到行上：标题过长时让它横向滑动，露出被省略号吃掉的尾巴。
+   * 标题滑动的运行态：一个标题只留一条动画。
    *
-   * 滑多远要现量（宽度随窗口与缩放变化），所以不在 arrange 时预算，只在这里量一次。
-   * 工作区小字由样式表在悬停时隐藏（见 styles.js），这里不管。
+   * 用 WeakMap 而不是往节点上挂属性：宿主会重建座位，节点换了旧状态自然回收。
+   */
+  const marquees = new WeakMap()
+
+  /**
+   * 悬停到行上：窗口固定（圆点之后到行尾），标题文字在这个窗口里向左挪。
+   *
+   * 做法是给文本套一层内层轨道再平移轨道，而不是平移标题本身、也不是滚 scrollLeft：
+   *   - 平移标题会把裁剪窗一起推走，左边缘跑到侧栏外面；
+   *   - 滚 scrollLeft 会让标题变成可滚动元素，行上能滚出横向滚动条（用户明确不要）。
+   * 轨道是行内的 inline-block，宽度就是文字宽度，裁剪仍然由标题的 overflow 负责。
+   * 先等两帧再量：悬停时工作区小字才隐藏、标题才拿到整行宽度，当场量会量到旧宽度。
    */
   function startMarquee(row) {
     const title = titleNodeOf(row)
     if (title === null) return
-    const overflow = title.scrollWidth - title.clientWidth
-    if (overflow <= 4) return
-    title.style.setProperty('--codex-sidebar-marquee-shift', '-' + overflow + 'px')
-    title.classList.add('codex-sidebar-marquee')
+    if (marquees.has(title)) return
+    // 先占位再等帧：一次悬停会连着触发好几个 mouseover（行里每个子元素各一次），
+    // 只在帧回调里判重会让它们全部排进来，最后套出好几层轨道。
+    marquees.set(title, null)
+    requestAnimationFrame(() => requestAnimationFrame(() => {
+      // 悬停期间行可能被重建，节点掉了就放弃。
+      if (!title.isConnected) {
+        marquees.delete(title)
+        return
+      }
+      title.classList.add(MARQUEE_CLASS)
+      const track = document.createElement('span')
+      track.className = 'codex-sidebar-marquee-track'
+      track.setAttribute(OWN_ATTR, '')
+      while (title.firstChild !== null) track.appendChild(title.firstChild)
+      title.appendChild(track)
+      const windowWidth = title.clientWidth - MARQUEE_TAIL_ROOM
+      const distance = track.getBoundingClientRect().width - windowWidth
+      if (distance <= 4) {
+        // 放得下就不动：把节点还回去，别留一层没用的包装。
+        while (track.firstChild !== null) title.insertBefore(track.firstChild, track)
+        track.remove()
+        title.classList.remove(MARQUEE_CLASS)
+        marquees.delete(title)
+        return
+      }
+      // 慢起步：位移越大走得越久，最长 3.2s；短距离也不低于 1.1s，否则像闪一下。
+      const duration = Math.min(3200, Math.max(1100, (distance / 55) * 1000))
+      const state = { frame: 0, start: 0, track }
+      marquees.set(title, state)
+      const step = now => {
+        if (state.start === 0) state.start = now
+        const progress = Math.min(1, (now - state.start) / duration)
+        // easeInOutSine：两头都慢，起步不会「嗖」一下冲出去。
+        const eased = -(Math.cos(Math.PI * progress) - 1) / 2
+        track.style.transform = `translateX(${(-distance * eased).toFixed(2)}px)`
+        if (progress < 1) state.frame = requestAnimationFrame(step)
+      }
+      state.frame = requestAnimationFrame(step)
+    }))
   }
 
-  /** 离开行：停下滑动并清掉内联变量。 */
+  /** 离开行：停掉动画，把文字从轨道里搬回标题，去掉包装与裁剪标记。 */
   function stopMarquee(row) {
     const title = titleNodeOf(row)
     if (title === null) return
-    title.classList.remove('codex-sidebar-marquee')
-    title.style.removeProperty('--codex-sidebar-marquee-shift')
+    const state = marquees.get(title)
+    if (state !== undefined) {
+      marquees.delete(title)
+      if (state !== null) {
+      cancelAnimationFrame(state.frame)
+      const track = state.track
+      // 宿主要是已经重渲过，轨道可能不在文档里，搬不回去就跳过。
+      if (track.parentNode === title) {
+        while (track.firstChild !== null) title.insertBefore(track.firstChild, track)
+        track.remove()
+      }
+      }
+    }
+    title.classList.remove(MARQUEE_CLASS)
   }
 
   /** 悬停事件交给 document 代理：座位会被宿主重建，逐个绑定留不住。 */
@@ -196,6 +262,10 @@ export function createDateView({ hostData, viewStore, locale, refreshBell, prepa
     if (!(event.target instanceof Element)) return
     const row = event.target.closest('[data-row-key^="session:"]')
     if (row === null) return
+    // 在行内从标题挪到预览、再挪到标签，都会来一对 out/over：
+    // 只要指针还留在这一行里就不算离开，否则滑动刚起步就被自己掐掉。
+    const next = event.relatedTarget
+    if (next instanceof Node && row.contains(next)) return
     stopMarquee(row)
   }
 

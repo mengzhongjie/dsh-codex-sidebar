@@ -15,7 +15,7 @@
  * 缩放走 zoom.js：桌面 App 优先用宿主半边的窗口级 page zoom（better-sidebar 的
  * 面板才会跟着一起放大），网页版退回页面 CSS；主题在场时仍让位给主题的 pageZoom。
  */
-import { PLUGIN_ID, LOG_PREFIX, BODY_ATTR, DATE_MODE_ATTR, OWN_ATTR } from './constants.js'
+import { PLUGIN_ID, LOG_PREFIX, BODY_ATTR, DATE_MODE_ATTR, OWN_ATTR, MARQUEE_CLASS } from './constants.js'
 import { readSettings, writeSettings, subscribeSettings } from './settings.js'
 import { createHostData } from './host-data.js'
 import { createLocale } from './locale.js'
@@ -177,7 +177,6 @@ function applyUnsafe(ctx) {
 
       if (next === 'dormant') {
         if (dateView.isActive()) dateView.disable()
-    dateView.dispose()
         if (settings.dateViewEnabled) writeSettings({ dateViewEnabled: false })
         return
       }
@@ -210,7 +209,11 @@ function applyUnsafe(ctx) {
    */
   function isOurMutation(record) {
     const target = record.target
-    return target instanceof Element && target.closest('[' + OWN_ATTR + ']') !== null
+    if (!(target instanceof Element)) return false
+    if (target.closest('[' + OWN_ATTR + ']') !== null) return true
+    // 悬停滑动会往标题里套一层轨道：这些变动属于我们，不能当成宿主变化去重排，
+    // 否则重排会重建行、悬停当场结束，滑动刚起步就被自己掐掉。
+    return target.closest('.' + MARQUEE_CLASS) !== null
   }
 
   // 侧栏与列表都是宿主渲染的：监听整页变化，合并到一帧里处理。
@@ -259,23 +262,31 @@ function applyUnsafe(ctx) {
 
   // 卸载：把所有改动还原，宿主恢复到装插件之前的样子。
   ctx.effect(() => () => {
-    window.clearInterval(boot)
-    observer.disconnect()
-    if (frameHandle !== 0) window.cancelAnimationFrame(frameHandle)
-    dateView.disable()
-    topbar.unmount()
-    zoom.reset()
-    zoom.dispose()
-    portalFit.dispose()
-    document.body.removeAttribute(BODY_ATTR)
-    document.body.removeAttribute(DATE_MODE_ATTR)
-    for (const dispose of disposers) {
+    // 每一步单独兜住：卸载时前面一步抛错，后面的还原就全都不执行了，
+    // 表现就是「插件在管理页关掉了，侧栏还挂着」。
+    const quietly = (step, action) => {
       try {
-        dispose()
-      } catch {
-        // 卸载期间单个清理失败不影响其他清理。
+        action()
+      } catch (error) {
+        console.warn(`${LOG_PREFIX} 卸载时 ${step} 失败`, error)
       }
     }
+    quietly('停轮询', () => window.clearInterval(boot))
+    quietly('断开观察者', () => observer.disconnect())
+    quietly('取消调度帧', () => {
+      if (frameHandle !== 0) window.cancelAnimationFrame(frameHandle)
+    })
+    // 先撤视图再撤顶行：视图的清理会用到顶行挂的落座信息。
+    quietly('撤销消息视图', () => dateView.disable())
+    quietly('卸下顶行按钮', () => topbar.unmount())
+    quietly('撤销缩放', () => zoom.reset())
+    quietly('释放缩放', () => zoom.dispose())
+    quietly('释放浮层补偿', () => portalFit.dispose())
+    quietly('撤掉标记', () => {
+      document.body.removeAttribute(BODY_ATTR)
+      document.body.removeAttribute(DATE_MODE_ATTR)
+    })
+    for (const dispose of disposers) quietly('释放订阅', dispose)
   })
 
   // 语言变化：日志留痕 + 顶行按钮文案 + 日期标题（等下一帧重排时更换）。

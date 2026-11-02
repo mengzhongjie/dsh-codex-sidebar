@@ -197,6 +197,17 @@ body[data-codex-sidebar] :is(dialog, [role="dialog"]) {
 }
 
 /*
+ * 标题窗口：宿主给会话行标题做了横向滚动（悬停时用 scrollLeft 挪文字），
+ * 在消息视图里那会变成行底一条横向滚动条、标题还会自己左右窜。
+ * overflow: clip 不建立滚动容器 —— 宿主再怎么设 scrollLeft 都不动，文字照旧用省略号收尾。
+ */
+[data-codex-sidebar-date-view] [data-row-key^="session:"] > span[class*="_title"] {
+  overflow: clip !important;
+  text-overflow: ellipsis !important;
+  white-space: nowrap !important;
+}
+
+/*
  * 悬停：工作区小字退场，标题拿到整行宽度。
  * Codex 的会话列表也是这么做的——悬停时把注意力收回到会话本身。
  */
@@ -207,28 +218,30 @@ body[data-codex-sidebar] :is(dialog, [role="dialog"]) {
 /*
  * 标题过长时悬停横向滑动，滑一次停在尾巴上，移开就复位。
  *
- * 只走一趟不再来回：来回摆会把开头的字反复甩出可视区，尾巴反而一直读不完整。
- * 两端用遮罩淡出，滑到尾部时最后一两个字是渐隐的，不是被硬切一刀。
- * 位移由 date-view.js 现量后写进 --codex-sidebar-marquee-shift：
- * 标题宽度随窗口与缩放变化，写死距离会滑多或滑不到。
+ * 窗口固定成「圆点之后到行尾」：靠 overflow 裁边，滚的是内容（scrollLeft），
+ * 不移动盒子本身——给标题加 transform 会把裁剪窗一起推走，左边缘就跑到侧栏外面去了。
+ * 位移与时长由 date-view.js 现量现算：窗口宽度随侧栏宽与缩放变化，写死距离会滑多或滑不到。
  */
 .codex-sidebar-marquee {
-  overflow: hidden !important;
+  /* 窗口固定：overflow 裁出「圆点到行尾」这一块，滚的是里面那条轨道（见 date-view.js）。 */
+  overflow: clip !important;
   text-overflow: clip !important;
   padding-right: 10px;
-  mask-image: linear-gradient(90deg, transparent 0, #000 12px, #000 calc(100% - 12px), transparent 100%);
-  -webkit-mask-image: linear-gradient(90deg, transparent 0, #000 12px, #000 calc(100% - 12px), transparent 100%);
-  animation: codex-sidebar-marquee 1.15s cubic-bezier(0.4, 0, 0.2, 1) forwards;
-  will-change: transform;
+  /* 只遮左端：字从圆点这一侧滑出去时渐隐，右端保持清晰——
+     滑到终点时尾巴正贴在右边缘，右端再加遮罩会把刚露出来的最后一个字又蒙掉。 */
+  mask-image: linear-gradient(90deg, transparent 0, #000 18px, #000 100%);
+  -webkit-mask-image: linear-gradient(90deg, transparent 0, #000 18px, #000 100%);
 }
 
-@keyframes codex-sidebar-marquee {
-  from {
-    transform: translateX(0);
-  }
-  to {
-    transform: translateX(var(--codex-sidebar-marquee-shift, 0px));
-  }
+/*
+ * 滑动轨道：包住标题文字，只平移这一层。
+ * 标题自身不动，所以裁剪窗始终停在原位；不给标题加 transform 也不滚 scrollLeft，
+ * 行上就不会出现横向滚动条。
+ */
+.codex-sidebar-marquee-track {
+  display: inline-block;
+  white-space: nowrap;
+  will-change: transform;
 }
 
 /*

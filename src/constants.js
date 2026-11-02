@@ -15,6 +15,14 @@ export const LOG_PREFIX = '[codex-sidebar]'
 export const BODY_ATTR = 'data-codex-sidebar'
 
 /** 挂在 <body> 上的日期视图标记：日期视图开着时才有。 */
+/**
+ * 悬停滑动的裁剪类名。
+ *
+ * entry.js 的观察者要用它判断「这条 DOM 变动是不是滑动自己弄的」：
+ * 给标题套轨道会触发文档变动，不忽略就会被当成宿主变化→重排→行被重建→悬停结束，滑动刚起就停。
+ */
+export const MARQUEE_CLASS = 'codex-sidebar-marquee'
+
 export const DATE_MODE_ATTR = 'data-codex-sidebar-date-view'
 
 /**
