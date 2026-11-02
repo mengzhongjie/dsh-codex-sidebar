@@ -44,34 +44,12 @@ export const SETTINGS_KEY = 'dsh-codex-sidebar.settings'
  */
 export const GROUP_BACKUP_KEY = 'dsh-codex-sidebar.group-before-date-view'
 
-/** 默认设置：日期视图默认关闭，默认屏蔽「闲聊」工作区，缩放 100%。 */
+/** 默认设置：消息视图默认关闭，默认屏蔽「闲聊」工作区。 */
 export const DEFAULT_SETTINGS = {
-  // 默认不进日期视图：保持宿主原本的工作区视图，按下顶行铃铛才切换。
+  // 默认不进消息视图：保持宿主原本的工作区视图，按下顶行铃铛才切换。
   dateViewEnabled: false,
-  skipWorkspaces: ['闲聊'],
-  zoom: 1
+  skipWorkspaces: ['闲聊']
 }
-
-/** 缩放的五个快捷档位（百分比），与设置页按钮一致。 */
-const ZOOM_STEPS = [0.8, 1, 1.25, 1.5]
-
-/** 缩放的合法区间：太大或太小都会让侧栏错位。 */
-export const ZOOM_RANGE = { min: 0.6, max: 2 }
-
-/**
- * 页面缩放的三件套：一个 body 属性、一个倍率变量、一组页面尺寸变量。
- *
- * 这是 dsh-claude-style 的做法（theme/chrome.css:146-167、shared/page-zoom.ts）：
- *   · 属性 data-codex-sidebar-page-zoom 只表示「现在有缩放」，值是倍率文本；
- *   · 样式表里写 `zoom: var(--codex-sidebar-page-zoom-factor, 1)`；
- *   · body 按窗口尺寸除以倍率定宽高并 overflow:hidden（页面缩放了，vh/vw 会再乘一次倍率）。
- * 关键区别：绝不写 body.style.zoom。行内 zoom 是「另一份缩放」，会把主题的
- * pageZoom 规则整条盖掉（主题仍按 1.15 补偿测量，页面却按 1 绘制，光标与浮层全偏）。
- */
-export const ZOOM_ATTR = 'data-codex-sidebar-page-zoom'
-export const ZOOM_VAR = '--codex-sidebar-page-zoom-factor'
-export const ZOOM_WIDTH_VAR = '--codex-sidebar-page-width'
-export const ZOOM_HEIGHT_VAR = '--codex-sidebar-page-height'
 
 /** 宿主侧栏根节点。 */
 export const SIDEBAR_SELECTOR = '[data-slot="sidebar"]'

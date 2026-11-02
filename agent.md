@@ -4,8 +4,11 @@
 
 ## 1. 这个项目是什么
 
-独立的 DSH（DeepSeek Harness）客户端插件：把左侧栏的会话列表按日期分段排列（今天 / 昨天 / 星期X / 更早），
-并把「不进入日期视图的工作区」「整体缩放」等设置注册进**官方设置页**的一页（设置 → 侧栏设置）。
+独立的 DSH（DeepSeek Harness）客户端插件：把左侧栏的会话列表按消息分段排列
+（优先级 / 昨天 / 星期X / 更早），每条会话两行（标题 + 最新消息预览），顶行一颗铃铛切换。
+
+不提供设置页、不提供缩放：设置页在 2026-11-02 取消（开关回归铃铛），缩放同日整份移除
+（整页缩放会与主题、better-sidebar 的浮层定位打架，属于宿主层面的事）。
 
 - 命名：包名 `dsh-codex-sidebar`，插件 id 同为 `dsh-codex-sidebar`，产物 id 用 `window.__ModuleLoader__.load({ id: 'dsh-codex-sidebar' })`。
 - 与 `dsh-claude-style` 的关系：**不依赖**。装了主题时插件进入 dormant（只留设置页，不动列表、不碰主题 DOM），
@@ -17,8 +20,8 @@
 
 ```
 src/
-  entry.js          组装：模式判定（solo/dormant）、缩放、设置页注册、MutationObserver 调度、卸载
-  constants.js      插件 id、body 标记、选择器、缩放档位与自定义属性名、默认设置
+  entry.js          组装：模式判定（solo/dormant）、顶行铃铛、MutationObserver 调度、卸载
+  constants.js      插件 id、body 标记、选择器、默认设置
   settings.js       localStorage 读写与订阅（键 dsh-codex-sidebar.settings）
   host-data.js      ctx.get('sessions'/'workspaces') 快照的只读封装 + 订阅
   view-store.js     slots.entries('sidebar.workspaces')[0].store.create() → 扁平/还原分组（带备份键自愈）

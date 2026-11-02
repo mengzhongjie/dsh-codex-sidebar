@@ -264,3 +264,29 @@
 - `settings.js` 的 `memorySettings` 读写都落地——第 9 条成立。
 - 注释与产物：`npm run build` 输出 76.3 KiB。
 
+## 2026-11-02 20:10 整份移除整页缩放（版本 0.2.0）
+
+用户指令：缩放可以扔了，版本号可以更新了。
+
+删掉的东西：
+- `src/zoom.js`（151 行）与 `src/portal-fit.js`（234 行）整个文件；`entry.js` 里的创建、
+  `applyZoomFromSettings()`、`applyPortalFit()`、resize 监听、卸载序列里的三个释放步骤一起删。
+- `constants.js` 的 `DEFAULT_SETTINGS.zoom`、`ZOOM_STEPS`、`ZOOM_RANGE`、`ZOOM_ATTR` / `ZOOM_VAR` /
+  `ZOOM_WIDTH_VAR` / `ZOOM_HEIGHT_VAR`；`settings.js` 的 `zoom` 归一化与 `ZOOM_RANGE` import。
+- `styles.js` 里的整页缩放规则（`#root { transform: scale(...) }`、body 与 html 的 hidden、
+  弹层按页面尺寸封顶那几条）与两段重复的缩放控件样式，共 137 行。
+- `locale.js` 五组缩放的两种语言文案。
+- `lib/index.js` 从 123 行收成空壳：宿主半边原本只做 `/codex-sidebar/api/zoom` 这一条路由，
+  路由没了就没有逻辑可留；保留 `name` 与空 `apply()` 只是为了让 `cordis.patch.yml` 的
+  `ui-codex-sidebar` 条目仍能 import 到本包 main（条目加载不起来，客户端半边也不会注入）。
+
+版本号：`package.json` 0.1.0 → 0.2.0。
+
+验证（两个隔离环境，重启后真机探针）：
+- webclean 与 webtheme 都是 6 段（Priority / Yesterday / Saturday / Friday / Tuesday / Earlier）、
+  46 个座位、44 条预览、座位重叠 0，控制台只有一行 `[codex-sidebar] applied (en, host en)`。
+- webtheme 那 3 条 404 与本轮无关（删缩放前后都在，服务端日志里查不到）。
+
+坑：删 `styles.js` 的缩放控件样式时，一起删掉了 CSS 模板的收尾反引号与分号，
+esbuild 报 `src/styles.js:416:1: ERROR: Unterminated string literal`；补回后产物 76.3 KiB → 60.9 KiB。
+

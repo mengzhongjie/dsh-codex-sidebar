@@ -11,43 +11,7 @@
 /** 样式表内容：集中一处，便于校对。 */
 const CSS = `
 /*
- * 整页缩放（说明见 constants.js 的 ZOOM_* 注释）。
- *
- * 缩放对象是 #root 而不是 body，手段是 transform 而不是 CSS zoom —— 这一条是实测结论：
- * 宿主把弹层（账号菜单、设置页）portal 到 body 上用 position:fixed + getBoundingClientRect
- * 定位，而 body 上的 CSS zoom 会让布局像素与视口像素不同源，缩放到 125% 时菜单被算到
- * 视口下方（y=898，菜单项 903，100% 时是 y=732），于是「调整缩放后设置打不开」。
- * transform 下 getBoundingClientRect 给的是视觉坐标，宿主的算法仍然正确。
- *
- * width/height 按「窗口尺寸 / 倍率」写死（由 JS 算出），这样缩放后正好铺满窗口；
- * 只挂在本插件自己的标记上：有主题时我们不写 data-codex-sidebar-page-zoom，不与主题的
- * pageZoom 叠加。
- */
-body[data-codex-sidebar][data-codex-sidebar-page-zoom] #root {
-  transform: scale(var(--codex-sidebar-page-zoom-factor, 1));
-  transform-origin: 0 0;
-  width: var(--codex-sidebar-page-width, 100vw);
-  height: var(--codex-sidebar-page-height, 100vh);
-}
-
-body[data-codex-sidebar][data-codex-sidebar-page-zoom] {
-  overflow: hidden;
-  margin: 0;
-}
-
-html:has(body[data-codex-sidebar][data-codex-sidebar-page-zoom]:not([data-codex-sidebar-page-zoom="1"])) {
-  padding: 0;
-  overflow: hidden;
-}
-
-/* 宿主弹层按视口单位封顶，缩放后会被放大一次，所以改用页面自身尺寸封顶。 */
-body[data-codex-sidebar] :is(dialog, [role="dialog"]) {
-  max-width: calc(var(--codex-sidebar-page-width, 100vw) - 48px);
-  max-height: calc(var(--codex-sidebar-page-height, 100vh) - 48px);
-}
-
-/*
- * 顶行动作区：铃铛与齿轮，紧贴宿主原有的折叠按钮。
+ * 顶行动作区：铃铛，紧贴宿主原有的折叠按钮。
  * gap 与宿主顶行按钮间距一致（2px），不额外撑高 logoRow。
  */
 .codex-sidebar-actions {
@@ -441,107 +405,7 @@ body[data-codex-sidebar] :is(dialog, [role="dialog"]) {
   font-size: 13px;
   opacity: 0.55;
 }
-
-/* 缩放控件行：跟在标题说明下方，左对齐，窄窗口时换行 */
-.codex-sidebar-settings-zoom-row {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8px;
-  padding: 2px 0 16px;
-}
-
-/* 缩放：四档按钮 + 自定义输入框，横向排一行 */
-.codex-sidebar-zoom {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-}
-
-.codex-sidebar-zoom-steps {
-  display: flex;
-  gap: 4px;
-}
-
-.codex-sidebar-zoom-step {
-  min-width: 48px;
-  padding: 5px 8px;
-  border-radius: var(--dsw-radius-sm, 8px);
-  border: 1px solid var(--dsw-alias-border-l2, color-mix(in srgb, currentColor 18%, transparent));
-  background: transparent;
-  color: inherit;
-  font-size: 12px;
-  cursor: pointer;
-}
-
-.codex-sidebar-zoom-step:hover {
-  background: var(--dsw-alias-interactive-bg-hover, color-mix(in srgb, currentColor 10%, transparent));
-}
-
-.codex-sidebar-zoom-step[data-selected="true"] {
-  border-color: var(--dsw-alias-label-primary, currentColor);
-  font-weight: 600;
-}
-
-.codex-sidebar-zoom-input {
-  width: 62px;
-  padding: 5px 8px;
-  border-radius: var(--dsw-radius-sm, 8px);
-  border: 1px solid var(--dsw-alias-border-l2, color-mix(in srgb, currentColor 18%, transparent));
-  background: transparent;
-  color: inherit;
-  font-size: 12px;
-}
-
-/* 缩放控件行：跟在标题说明下方，左对齐，窄窗口时换行 */
-.codex-sidebar-settings-zoom-row {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8px;
-  padding: 2px 0 16px;
-}
-
-/* 缩放：五档按钮 + 自定义输入框，纵向居中成一排 */
-.codex-sidebar-zoom {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-}
-
-.codex-sidebar-zoom-steps {
-  display: flex;
-  gap: 4px;
-}
-
-.codex-sidebar-zoom-step {
-  min-width: 48px;
-  padding: 5px 8px;
-  border-radius: var(--dsw-radius-sm, 8px);
-  border: 1px solid var(--dsw-alias-border-l2, color-mix(in srgb, currentColor 18%, transparent));
-  background: transparent;
-  color: inherit;
-  font-size: 12px;
-  cursor: pointer;
-}
-
-.codex-sidebar-zoom-step:hover {
-  background: var(--dsw-alias-interactive-bg-hover, color-mix(in srgb, currentColor 10%, transparent));
-}
-
-.codex-sidebar-zoom-step[data-selected="true"] {
-  border-color: var(--dsw-alias-label-primary, currentColor);
-  font-weight: 600;
-}
-
-.codex-sidebar-zoom-input {
-  width: 62px;
-  padding: 5px 8px;
-  border-radius: var(--dsw-radius-sm, 8px);
-  border: 1px solid var(--dsw-alias-border-l2, color-mix(in srgb, currentColor 18%, transparent));
-  background: transparent;
-  color: inherit;
-  font-size: 12px;
-}
-`
+`;
 
 /** 把样式注入页面，返回卸载函数。 */
 export function mountStyles() {

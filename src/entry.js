@@ -12,16 +12,13 @@
  *            主题在但日期视图被删掉时按 solo 走，列表由本插件接管。
  * 模式在 reconcile() 里判定，设置变化、侧栏挂载、页面变动都会重新跑它。
  *
- * 缩放走 zoom.js：桌面 App 优先用宿主半边的窗口级 page zoom（better-sidebar 的
- * 面板才会跟着一起放大），网页版退回页面 CSS；主题在场时仍让位给主题的 pageZoom。
+ * 缩放不属于本插件：整页缩放会与主题、better-sidebar 的浮层定位打架，2026-11-02 起整份移除。
  */
 import { PLUGIN_ID, LOG_PREFIX, BODY_ATTR, DATE_MODE_ATTR, OWN_ATTR, MARQUEE_CLASS } from './constants.js'
 import { readSettings, writeSettings, subscribeSettings } from './settings.js'
 import { createHostData } from './host-data.js'
 import { createLocale } from './locale.js'
 import { themeDateTrigger, themeHasDateView } from './coexist.js'
-import { createZoom } from './zoom.js'
-import { createPortalFit } from './portal-fit.js'
 import { createViewStore } from './view-store.js'
 import { createDateView } from './date-view.js'
 import { createTopbar } from './topbar.js'
@@ -70,11 +67,6 @@ function applyUnsafe(ctx) {
 
   const hostData = createHostData(ctx)
   const viewStore = createViewStore(ctx)
-  // 缩放控制器：桌面 App 会走宿主半边的窗口级 page zoom，网页版退回页面 CSS。
-  const zoom = createZoom()
-  // 页面 CSS 缩放时，挂在 body 上的浮层（宿主菜单、设置页、better-sidebar 面板）要单独跟着放大。
-  const portalFit = createPortalFit()
-
   /** 顶行动作区（延迟赋值：date-view 的回调要引用它刷新铃铛）。 */
   let topbar = null
 
@@ -111,23 +103,6 @@ function applyUnsafe(ctx) {
       return trigger.getAttribute('aria-pressed') === 'true'
     },
   })
-
-  /**
-   * 缩放不再由侧栏负责。
-   *
-   * 早先本插件在 body 上做页面缩放，并给 body 上的浮层做坐标补偿；那套做法在桌面 App 里
-   * 与主题、better-sidebar 的浮层反复打架。现在侧栏不再提供缩放入口，这里只负责把历史
-   * 版本留下的缩放痕迹清干净（body 上的 zoom 与浮层补偿属性）。
-   */
-  function applyZoomFromSettings() {
-    zoom.reset()
-    portalFit.apply(1)
-  }
-
-  /** 落地浮层补偿：倍率为 1 或走窗口级缩放时一律还原。 */
-  function applyPortalFit(factor, enabled) {
-    portalFit.apply(enabled === true ? factor : 1)
-  }
 
   /** reconcile 重入保护：它内部会写设置，设置订阅又会回调它。 */
   let reconciling = false
@@ -173,7 +148,6 @@ function applyUnsafe(ctx) {
       const settings = readSettings()
       const next = themeHasDateView() ? 'dormant' : 'solo'
       setMode(next)
-      applyZoomFromSettings()
 
       if (next === 'dormant') {
         if (dateView.isActive()) dateView.disable()
@@ -237,24 +211,15 @@ function applyUnsafe(ctx) {
   })
   observer.observe(document.body, { childList: true, subtree: true })
 
-  // 窗口尺寸变化：CSS 缩放路线下，页面尺寸变量要跟着重算，满屏浮层也要重新量。
-  const onResize = () => {
-    zoom.handleResize()
-    portalFit.handleResize()
-  }
-  window.addEventListener('resize', onResize)
-  disposers.push(() => window.removeEventListener('resize', onResize))
-
   // 数据变化（会话更新、运行状态）也要重排与刷新小圆点。
   disposers.push(hostData.subscribe(() => {
     topbar?.refreshBell()
     dateView.schedule()
   }))
 
-  // 设置变化：缩放立即生效，开关与共存模式交给 reconcile。
+  // 设置变化：开关与共存模式统一交给 reconcile。
   disposers.push(subscribeSettings(() => {
     reconcile()
-    applyZoomFromSettings()
     dateView.schedule()
   }))
 
@@ -290,9 +255,6 @@ function applyUnsafe(ctx) {
     // 先撤视图再撤顶行：视图的清理会用到顶行挂的落座信息。
     quietly('撤销消息视图', () => dateView.disable())
     quietly('卸下顶行按钮', () => topbar.unmount())
-    quietly('撤销缩放', () => zoom.reset())
-    quietly('释放缩放', () => zoom.dispose())
-    quietly('释放浮层补偿', () => portalFit.dispose())
     quietly('撤掉标记', () => {
       document.body.removeAttribute(BODY_ATTR)
       document.body.removeAttribute(DATE_MODE_ATTR)

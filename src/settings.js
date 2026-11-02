@@ -4,7 +4,7 @@
  * 为什么不走宿主的 settings 服务：那是主题包 / 宿主内部实现，独立插件拿不到；
  * 而设置项很少、结构简单，本地存储足够，也不受宿主升级影响。
  */
-import { SETTINGS_KEY, DEFAULT_SETTINGS, ZOOM_RANGE } from './constants.js'
+import { SETTINGS_KEY, DEFAULT_SETTINGS } from './constants.js'
 
 /** 订阅者集合：设置变化时通知侧栏与设置页。 */
 const listeners = new Set()
@@ -18,12 +18,9 @@ function normalize(raw) {
   const skip = Array.isArray(source.skipWorkspaces)
     ? source.skipWorkspaces.filter(item => typeof item === 'string' && item.trim() !== '')
     : DEFAULT_SETTINGS.skipWorkspaces.slice()
-  const zoomValue = typeof source.zoom === 'number' && Number.isFinite(source.zoom) ? source.zoom : DEFAULT_SETTINGS.zoom
   return {
     dateViewEnabled: typeof source.dateViewEnabled === 'boolean' ? source.dateViewEnabled : DEFAULT_SETTINGS.dateViewEnabled,
-    skipWorkspaces: skip,
-    // 缩放夹在合法区间内：手填 0 或 10 会把界面搞坏。
-    zoom: Math.min(ZOOM_RANGE.max, Math.max(ZOOM_RANGE.min, zoomValue))
+    skipWorkspaces: skip
   }
 }
 
