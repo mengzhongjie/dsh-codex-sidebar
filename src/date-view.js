@@ -405,8 +405,8 @@ export function createDateView({ hostData, viewStore, locale, refreshBell, prepa
           }
           continue
         }
-        // 主会话固定进「优先级」段落并排在最前：它是这个工作区的对话入口，不该按时间沉下去。
-        const bucket = isMain ? { text: copy.today, rank: 0 } : (running ? { text: copy.today, rank: 0 } : bucketOf(time, now, copy))
+        // 主会话不置顶：它跟普通会话走同一套规则——正在运行就进「优先级」，否则按时间归段。
+        const bucket = running ? { text: copy.today, rank: 0 } : bucketOf(time, now, copy)
         if (isMain) {
           // 类要挂在真正带 data-row-key 的那一行上：座位只是它的外壳，
           // 样式表的 [data-row-key^="session:"] 规则命中不了外壳（实测主会话因此一直不见）。
@@ -434,9 +434,9 @@ export function createDateView({ hostData, viewStore, locale, refreshBell, prepa
       for (const seat of nextHidden) hiddenSeats.add(seat)
 
       // 3) 排序：段落先后 → 运行中优先 → 更新时间从新到旧。
+      //    主会话没有额外排序权重，它靠「运行中」这条跟其它活跃会话一样被顶到最前。
       visible.sort((left, right) =>
         left.bucket.rank - right.bucket.rank
-        || Number(right.isMain) - Number(left.isMain)
         || Number(right.running) - Number(left.running)
         || right.time - left.time)
 

@@ -340,7 +340,7 @@ esbuild 报 `src/styles.js:416:1: ERROR: Unterminated string literal`；补回�
   `display: flex !important` 把行顶回可见；**行内保持 `none` 不动** ——
   对面只在「行内不是 none」时才动手，于是它认为早就藏好、不再来改写，
   不会变成「你写我改」的观察者互激。
-- 主会话固定落在「优先级」段落最前，行内标签写「主会话」（`copy.mainSession`）。
+- 主会话**不置顶**：它跟普通会话走同一套归段与排序规则（运行中的进「优先级」，否则按时间归段），只是行内标签写「主会话」（`copy.mainSession`）以便辨认。2026-11-02 20:48 按用户要求改的，此前是固定排最前。
 - superagent 自己的其它会话（`worker-` 执行者、其它 `orchestrator-` 评估）照样不进列表：
   原来是我们把它们的 `display` 从 none 改回可见，现在直接跳过、不碰它们的样式。
 
