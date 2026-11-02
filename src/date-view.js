@@ -141,15 +141,17 @@ export function createDateView({ hostData, viewStore, locale, refreshBell, prepa
         const running = state?.running === true
         // 正在运行的会话算作今天：它的更新时间可能很久之前，但用户现在在看它。
         const bucket = running ? { text: copy.today, rank: 0 } : bucketOf(time, now, copy)
-        seat.style.display = ''
+        if (seat.style.display !== '') seat.style.display = ''
         visible.push({ seat, row, time, running, bucket, workspace })
       }
 
       // 2) 上一轮隐藏、这一轮可见的座位要恢复；反过来要隐藏。
       for (const seat of hiddenSeats) {
-        if (!nextHidden.has(seat)) seat.style.display = ''
+        if (!nextHidden.has(seat) && seat.style.display !== '') seat.style.display = ''
       }
-      for (const seat of nextHidden) seat.style.display = 'none'
+      for (const seat of nextHidden) {
+        if (seat.style.display !== 'none') seat.style.display = 'none'
+      }
       hiddenSeats.clear()
       for (const seat of nextHidden) hiddenSeats.add(seat)
 
@@ -163,39 +165,43 @@ export function createDateView({ hostData, viewStore, locale, refreshBell, prepa
       for (const item of visible) dressRow(item.row, item.workspace)
 
       // 5) 生成节点序列：段落变化处插标题。
+      //    标题节点必须复用上一轮的同名节点：每轮都新建的话，下面的「顺序没变」判定永远是 false，
+      //    于是每帧都删标题 + 重排全部座位 → 观察者再次触发 → 自激（实测每秒上千次 DOM 变动，
+      //    表现就是鼠标扫过会话行时整行轻微抖动）。
+      const spareHeaders = new Map()
+      for (const header of headers) {
+        const text = header.textContent ?? ''
+        if (!spareHeaders.has(text)) spareHeaders.set(text, header)
+      }
       const nodes = []
       let lastText = null
       for (const item of visible) {
         if (item.bucket.text !== lastText) {
-          nodes.push(createHeader(item.bucket.text))
+          const header = spareHeaders.get(item.bucket.text) ?? createHeader(item.bucket.text)
+          nodes.push(header)
           lastText = item.bucket.text
         }
         nodes.push(item.seat)
       }
 
-      // 6) 顺序没变就不动 DOM（避免每次数据刷新都抖动）。
-      const current = [...container.children]
-      const sameOrder = current.length === nodes.length && nodes.every((node, index) => current[index] === node)
-      if (sameOrder) {
-        // 标题节点上一步可能被换成新节点，回收掉旧的。
-        for (const header of [...headers]) {
-          if (header.parentElement !== container) headers.delete(header)
-        }
-        for (const node of nodes) {
-          if (node.getAttribute?.(OWN_ATTR) !== null) headers.add(node)
-        }
-        return
-      }
+      // 6) 只比较「我们这套节点」的相对顺序。
+      //    容器里还留着被隐藏的座位（display:none，不删是为了让宿主自己的状态不丢），
+      //    直接拿 container.children 和 nodes 逐位比会永远不相等，于是每帧都重排一遍
+      //    ——这正是鼠标扫过会话行时整行轻微抖动的来源。
+      const wanted = new Set(nodes)
+      const present = [...container.children].filter(child => wanted.has(child))
+      const inOrder = present.length === nodes.length && present.every((child, index) => child === nodes[index])
 
-      // 7) 清掉旧标题、按计划顺序重排：appendChild 对已有节点等价于移动。
-      for (const header of headers) {
-        if (header.parentElement === container) header.remove()
-      }
+      // 7) 标题集合对齐到这串节点（复用的节点留在集合里，落单的回收）。
       headers.clear()
-      for (const node of nodes) container.appendChild(node)
       for (const node of nodes) {
         if (node.getAttribute?.(OWN_ATTR) !== null) headers.add(node)
       }
+      if (inOrder) return
+
+      // 8) 顺序不对才动 DOM：appendChild 对已有节点等价于移动，按顺序 append 一遍即可，
+      //    标题不必删除重建（删了再插会让宿主以为列表结构变了，整片行重渲染）。
+      for (const node of nodes) container.appendChild(node)
     } finally {
       applying = false
     }

@@ -11,7 +11,9 @@
 /** 两套用词。 */
 const LABELS = {
   zh: {
-    today: '今天',
+    // 第一段装的是「正在跑的会话 + 今天的会话」，用户要的名字是「优先级」：
+    // 活跃会话被强制提到这一段最前，它才是这段的主语。
+    today: '优先级',
     yesterday: '昨天',
     earlier: '更早',
     weekdays: ['星期日', '星期一', '星期二', '星期三', '星期四', '星期五', '星期六'],
@@ -34,7 +36,7 @@ const LABELS = {
     themeNoticeDesc: '检测到 dsh-claude-style：侧栏的日期排列与页面缩放都由主题负责，本插件不修改主题的界面。停用主题后，本插件会自动接管日期视图与缩放。'
   },
   en: {
-    today: 'Today',
+    today: 'Priority',
     yesterday: 'Yesterday',
     earlier: 'Earlier',
     weekdays: ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'],

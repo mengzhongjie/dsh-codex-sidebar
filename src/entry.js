@@ -15,7 +15,7 @@
  * 缩放走 zoom.js：桌面 App 优先用宿主半边的窗口级 page zoom（better-sidebar 的
  * 面板才会跟着一起放大），网页版退回页面 CSS；主题在场时仍让位给主题的 pageZoom。
  */
-import { PLUGIN_ID, LOG_PREFIX, BODY_ATTR, DATE_MODE_ATTR } from './constants.js'
+import { PLUGIN_ID, LOG_PREFIX, BODY_ATTR, DATE_MODE_ATTR, OWN_ATTR } from './constants.js'
 import { readSettings, writeSettings, subscribeSettings } from './settings.js'
 import { createHostData } from './host-data.js'
 import { createLocale } from './locale.js'
@@ -237,8 +237,23 @@ function applyUnsafe(ctx) {
     })
   }
 
+  /**
+   * 判断一条变动是不是我们自己写的。
+   *
+   * 我们的标题、行内标签都带 OWN_ATTR，落在它们内部的改动不该再触发一轮重排：
+   * 否则「写节点 → 观察者 → 重排 → 写节点」会自激（实测每秒上千次 DOM 变动，
+   * 鼠标扫过会话行时整行轻微抖动就是这个）。
+   */
+  function isOurMutation(record) {
+    const target = record.target
+    return target instanceof Element && target.closest('[' + OWN_ATTR + ']') !== null
+  }
+
   // 侧栏与列表都是宿主渲染的：监听整页变化，合并到一帧里处理。
-  const observer = new MutationObserver(() => schedule())
+  const observer = new MutationObserver(records => {
+    if (records.every(isOurMutation)) return
+    schedule()
+  })
   observer.observe(document.body, { childList: true, subtree: true })
 
   // 窗口尺寸变化：CSS 缩放路线下，页面尺寸变量要跟着重算，满屏浮层也要重新量。

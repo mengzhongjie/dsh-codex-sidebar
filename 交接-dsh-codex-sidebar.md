@@ -128,3 +128,8 @@
 - 发现中优先级缺陷：`src/settings.js:38-46` 在 `localStorage.setItem` 失败时只通知订阅者、不保留内存设置；随后 `readSettings()` 会回到旧值。现有注释“本次会话仍然生效”与实际行为不符。
 - 运行时覆盖缺口：本机无头 Chromium 启动被 macOS Mach 权限拒绝，`dsh --profile codexprobe` 未产出可用 URL；因此当前用户未提交的顶栏/缩放改动尚未在本轮独立复验。
 - 保留限制：当前 `entry.js:230` 仅在日期视图未激活时调用 `topbar.mount()`；若宿主在日期视图激活期间替换顶栏节点，按钮恢复行为仍需真实页面验证。
+## 2026-11-02 补记
+
+- 完成：首段改名（今天 → 优先级 / Today → Priority）；修复日期视图悬停抖动（标题节点复用 + 只比自有节点相对顺序 + display 幂等 + 观察者跳过自写变动）。
+- 验证：`.debug/hover.mjs` 实测 codexprobe 0 次 DOM 变动、desktopmirror（含主题）1 次，deltas 全 0；日期标题 [优先级, 昨天, 星期六, 星期五, 星期二, 更早]。
+- 未验证：真实 desktop App 需用户 Cmd+Q 重开后确认（本轮只跑 web 镜像 profile）。
