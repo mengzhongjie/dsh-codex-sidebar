@@ -7,17 +7,29 @@
  *     → 顶行铃铛（切换日期视图）+ 齿轮（打开官方设置页）
  *     → 官方设置页里的「侧栏设置」一页（注册进 settings.section 插槽）
  *
- * 与 dsh-claude-style 共存有三种模式（见 coexist.js）：
- *   solo     原生宿主：铃铛 + 齿轮，全功能；
- *   dormant  装了主题、未接管：只挂齿轮，日期视图交给主题；
- *   takeover 装了主题、用户勾选接管：藏掉主题铃铛，由本插件提供日期视图。
- * 模式在 reconcile() 里统一判定，设置变化、侧栏挂载、主题状态变化都会重新跑它。
+ * 与 dsh-claude-style 只有两种模式（见 coexist.js）：
+ *   solo     页面没有主题：铃铛 + 齿轮全功能；
+ *   dormant  页面有主题：只挂齿轮；不动列表、不碰主题的 DOM。
+ * 模式在 reconcile() 里判定，设置变化、侧栏挂载、页面变动都会重新跑它。
+ *
+ * 整页缩放抄的是 dsh-claude-style 的做法（见 constants.js 的 ZOOM_* 注释）：
+ * 属性 + 自定义属性 + 样式表规则，绝不写行内 body.style.zoom；主题在场时让位，
+ * 由主题自己的 pageZoom 负责，两边不会同时给 body 上 zoom。
  */
-import { PLUGIN_ID, LOG_PREFIX, BODY_ATTR, DATE_MODE_ATTR, TAKEOVER_ATTR, THEME_DATE_MODE_ATTR } from './constants.js'
+import {
+  PLUGIN_ID,
+  LOG_PREFIX,
+  BODY_ATTR,
+  DATE_MODE_ATTR,
+  ZOOM_ATTR,
+  ZOOM_VAR,
+  ZOOM_WIDTH_VAR,
+  ZOOM_HEIGHT_VAR
+} from './constants.js'
 import { readSettings, writeSettings, subscribeSettings } from './settings.js'
 import { createHostData } from './host-data.js'
-import { resolveLocale, labelsFor } from './locale.js'
-import { coexistMode, themeDateViewActive, dismissThemeDateView } from './coexist.js'
+import { resolveLocale, labelsFor, hostLocaleText } from './locale.js'
+import { themePresent } from './coexist.js'
 import { createViewStore } from './view-store.js'
 import { createDateView } from './date-view.js'
 import { createSettingsSection } from './settings-section.js'
@@ -32,9 +44,37 @@ export const name = PLUGIN_ID
 // 其他宿主服务（sessions / workspaces）用 ctx.get() 只读访问，不占 inject 槽位。
 export const inject = ['slots']
 
-/** 把缩放倍率应用到整页。 */
-function applyZoom(zoom) {
-  document.body.style.zoom = String(zoom)
+/**
+ * 缩放时把「页面自身的尺寸」写成两个变量。
+ *
+ * 页面被 zoom 缩放后，vh/vw 会再乘一次倍率，宿主的弹层按视口单位封顶就会超出窗口；
+ * 把窗口尺寸除以倍率写成 --codex-sidebar-page-width/height，样式表就能用它封顶。
+ * （与 dsh-claude-style 的 shared/page-scale.ts 同一个算法。）
+ */
+function writePageSize(factor) {
+  document.body.style.setProperty(ZOOM_WIDTH_VAR, `${Math.round(window.innerWidth / factor)}px`)
+  document.body.style.setProperty(ZOOM_HEIGHT_VAR, `${Math.round(window.innerHeight / factor)}px`)
+}
+
+/**
+ * 把缩放倍率写到页面上（抄 dsh-claude-style 的样式表缩放，不写行内 zoom）。
+ *
+ * @param zoom    倍率（1 表示 100%）
+ * @param enabled false 时把三件套全部撤掉（有主题时由主题负责缩放）
+ */
+function applyZoom(zoom, enabled) {
+  const body = document.body
+  const factor = Math.round(zoom * 100) / 100
+  if (!enabled || Math.abs(factor - 1) < 0.001) {
+    body.removeAttribute(ZOOM_ATTR)
+    body.style.removeProperty(ZOOM_VAR)
+    body.style.removeProperty(ZOOM_WIDTH_VAR)
+    body.style.removeProperty(ZOOM_HEIGHT_VAR)
+    return
+  }
+  body.style.setProperty(ZOOM_VAR, String(factor))
+  body.setAttribute(ZOOM_ATTR, String(factor))
+  writePageSize(factor)
 }
 
 /**
@@ -87,7 +127,7 @@ function applyUnsafe(ctx) {
   const disposers = []
   disposers.push(mountStyles())
 
-  // 界面语言只判定一次：段落标题、设置面板、无主题时的按钮都跟着它走。
+  // 界面语言只判定一次：段落标题、设置页、无主题时的按钮都跟着它走。
   const locale = resolveLocale(ctx)
   const copy = labelsFor(locale)
 
@@ -97,42 +137,14 @@ function applyUnsafe(ctx) {
   /** 顶行动作区（延迟赋值：date-view 的回调要引用它刷新铃铛）。 */
   let topbar = null
 
-  /** 当前共存模式：solo / dormant / takeover（null 表示还没判定）。 */
+  /** 当前模式：solo / dormant（null 表示还没判定）。 */
   let mode = null
-  /** 接管模式下，body 上的主题日期标记是不是我们借来用的（退出时要还）。 */
-  let themeMarkerLoaned = false
-
-  /**
-   * 借用主题的「日期视图开着」标记。
-   *
-   * 为什么需要：dsh-claude-style 把侧栏工作区列表换成了自己的 provider，它会盯着宿主的
-   * 分组状态；看到 flat 就认为是我们以外的某处写的，立刻改回工作区分组。它只在 body 上
-   * 有 data-dsh-claude-date-groups 时才放手 —— 那是它自己日期视图开着的信号。
-   * 我们接管时借用这个标记，flatten 才能站住；退出时原样还回去。
-   */
-  function ensureThemeMarkerLoan() {
-    if (themeMarkerLoaned || document.body.hasAttribute(THEME_DATE_MODE_ATTR)) return
-    document.body.setAttribute(THEME_DATE_MODE_ATTR, '')
-    themeMarkerLoaned = true
-  }
-
-  /** 归还借用（只在确实是我们加的标记时才删）。 */
-  function releaseThemeMarkerLoan() {
-    if (!themeMarkerLoaned) return
-    document.body.removeAttribute(THEME_DATE_MODE_ATTR)
-    themeMarkerLoaned = false
-  }
 
   const dateView = createDateView({
     hostData,
     viewStore,
     locale,
-    refreshBell: () => topbar?.refreshBell(),
-    // 只有接管模式才需要借用主题标记；原生宿主上没有主题，不必碰。
-    prepareEnable: () => {
-      if (mode === 'takeover') ensureThemeMarkerLoan()
-    },
-    afterDisable: () => releaseThemeMarkerLoan()
+    refreshBell: () => topbar?.refreshBell()
   })
 
   // 设置界面直接住进官方设置页，不再自己画浮层。
@@ -151,24 +163,13 @@ function applyUnsafe(ctx) {
     }
   })
 
-  // 缩放：启动时恢复上次的倍率。
-  applyZoom(readSettings().zoom)
-
   /** reconcile 重入保护：它内部会写设置，设置订阅又会回调它。 */
   let reconciling = false
-  /** 让主题退出日期视图后，延时进入我们自己的（避免两边同一帧里抢同一批座位）。 */
-  let takeoverTimer = 0
 
-  /** 应用模式带来的可见变化：接管标记（CSS 藏主题铃铛）与铃铛显隐。 */
+  /** 应用模式带来的可见变化：只有日期视图开着时才需要铃铛。 */
   function setMode(next) {
     if (mode === next) return
     mode = next
-    if (next === 'takeover') document.body.setAttribute(TAKEOVER_ATTR, '')
-    else {
-      document.body.removeAttribute(TAKEOVER_ATTR)
-      // 不再是接管模式：借来的主题标记立刻还回去，别把主题的界面留在日期模式。
-      releaseThemeMarkerLoan()
-    }
     topbar?.setShowBell(next !== 'dormant')
   }
 
@@ -191,34 +192,23 @@ function applyUnsafe(ctx) {
    *
    * 三条不变量：
    *   1. dormant 下绝不动列表（主题在自己的日期视图里搬座位，我们插手就会打架）；
-   *   2. takeover 下主题的日期视图必须先退出，再进我们的；
-   *   3. 用户的开关（dateViewEnabled）是意图，但 dormant 下无法执行——直接写回 false。
+   *   2. dormant 下用户的开关是意图但执行不了 —— 直接写回 false，避免切模式时突然生效；
+   *   3. solo 下按用户的开关来。
    */
   function reconcile() {
     if (reconciling) return
     reconciling = true
     try {
       const settings = readSettings()
-      const next = coexistMode(settings.takeoverWithTheme)
+      const next = themePresent() ? 'dormant' : 'solo'
       setMode(next)
+      // 有主题时缩放归主题的 pageZoom，我们一律撤掉自己的三件套。
+      applyZoom(settings.zoom, next === 'solo')
 
       if (next === 'dormant') {
         if (dateView.isActive()) dateView.disable()
-        // 主题负责日期视图：把我们的开关归零，避免下次切模式时突然接管。
         if (settings.dateViewEnabled) writeSettings({ dateViewEnabled: false })
         return
-      }
-
-      // 接管模式：主题若正开着它的日期视图（标记不是我们借的），先让它退出（等价用户手点它的铃铛）。
-      if (next === 'takeover' && !themeMarkerLoaned && themeDateViewActive()) {
-        if (dismissThemeDateView()) {
-          if (takeoverTimer !== 0) window.clearTimeout(takeoverTimer)
-          takeoverTimer = window.setTimeout(() => {
-            takeoverTimer = 0
-            reconcile()
-          }, 320)
-          return
-        }
       }
 
       if (settings.dateViewEnabled && !dateView.isActive()) dateView.enable()
@@ -244,6 +234,13 @@ function applyUnsafe(ctx) {
   const observer = new MutationObserver(() => schedule())
   observer.observe(document.body, { childList: true, subtree: true })
 
+  // 窗口尺寸变化：缩放中的页面尺寸变量要跟着重算。
+  const onResize = () => {
+    if (document.body.hasAttribute(ZOOM_ATTR)) writePageSize(readSettings().zoom)
+  }
+  window.addEventListener('resize', onResize)
+  disposers.push(() => window.removeEventListener('resize', onResize))
+
   // 数据变化（会话更新、运行状态）也要重排与刷新小圆点。
   disposers.push(hostData.subscribe(() => {
     topbar?.refreshBell()
@@ -252,8 +249,8 @@ function applyUnsafe(ctx) {
 
   // 设置变化：缩放立即生效，开关与共存模式交给 reconcile。
   disposers.push(subscribeSettings(settings => {
-    applyZoom(settings.zoom)
     reconcile()
+    applyZoom(settings.zoom, mode === 'solo')
     dateView.schedule()
   }))
 
@@ -271,15 +268,13 @@ function applyUnsafe(ctx) {
   // 卸载：把所有改动还原，宿主恢复到装插件之前的样子。
   ctx.effect(() => () => {
     window.clearInterval(boot)
-    if (takeoverTimer !== 0) window.clearTimeout(takeoverTimer)
     observer.disconnect()
     if (frameHandle !== 0) window.cancelAnimationFrame(frameHandle)
     dateView.disable()
     topbar.unmount()
-    document.body.style.zoom = ''
+    applyZoom(1, false)
     document.body.removeAttribute(BODY_ATTR)
     document.body.removeAttribute(DATE_MODE_ATTR)
-    document.body.removeAttribute(TAKEOVER_ATTR)
     for (const dispose of disposers) {
       try {
         dispose()
@@ -289,5 +284,6 @@ function applyUnsafe(ctx) {
     }
   })
 
-  console.log(`${LOG_PREFIX} applied (${locale})`)
+  const hostLocale = hostLocaleText(ctx)
+  console.log(`${LOG_PREFIX} applied (${locale}${hostLocale ? `, host ${hostLocale}` : ''})`)
 }

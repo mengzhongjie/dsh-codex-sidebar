@@ -11,6 +11,37 @@
 /** 样式表内容：集中一处，便于校对。 */
 const CSS = `
 /*
+ * 整页缩放（照 dsh-claude-style 的做法，说明见 constants.js 的 ZOOM_* 注释）。
+ *
+ * 只挂在本插件自己的标记上：有主题时我们根本不写 data-codex-sidebar-page-zoom，
+ * 所以不会和主题的 body[data-dsh-claude-page-zoom] 规则同时给 body 上 zoom。
+ * 倍率走自定义属性；非 100% 时 body 按「窗口尺寸 / 倍率」定宽高并裁掉滚动，
+ * 否则 vh/vw 会再乘一次倍率，页面底部会多出一条空白带。
+ * 注意：这里绝不写行内 zoom —— 行内样式会把主题的 pageZoom 整条盖掉。
+ */
+body[data-codex-sidebar][data-codex-sidebar-page-zoom] {
+  zoom: var(--codex-sidebar-page-zoom-factor, 1);
+}
+
+body[data-codex-sidebar][data-codex-sidebar-page-zoom]:not([data-codex-sidebar-page-zoom="1"]) {
+  width: var(--codex-sidebar-page-width, 100%);
+  height: var(--codex-sidebar-page-height, 100%);
+  overflow: hidden;
+  margin: 0;
+}
+
+html:has(body[data-codex-sidebar][data-codex-sidebar-page-zoom]:not([data-codex-sidebar-page-zoom="1"])) {
+  padding: 0;
+  overflow: hidden;
+}
+
+/* 宿主弹层按视口单位封顶，缩放后会被放大一次，所以改用页面自身尺寸封顶。 */
+body[data-codex-sidebar] :is(dialog, [role="dialog"]) {
+  max-width: calc(var(--codex-sidebar-page-width, 100vw) - 48px);
+  max-height: calc(var(--codex-sidebar-page-height, 100vh) - 48px);
+}
+
+/*
  * 顶行动作区：铃铛与齿轮，紧贴宿主原有的折叠按钮。
  * gap 与宿主顶行按钮间距一致（2px），不额外撑高 logoRow。
  */
@@ -295,6 +326,56 @@ const CSS = `
   padding: 4px 0 8px;
   font-size: 13px;
   opacity: 0.55;
+}
+
+/* 缩放控件行：跟在标题说明下方，左对齐，窄窗口时换行 */
+.codex-sidebar-settings-zoom-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  padding: 2px 0 16px;
+}
+
+/* 缩放：四档按钮 + 自定义输入框，横向排一行 */
+.codex-sidebar-zoom {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.codex-sidebar-zoom-steps {
+  display: flex;
+  gap: 4px;
+}
+
+.codex-sidebar-zoom-step {
+  min-width: 48px;
+  padding: 5px 8px;
+  border-radius: var(--dsw-radius-sm, 8px);
+  border: 1px solid var(--dsw-alias-border-l2, color-mix(in srgb, currentColor 18%, transparent));
+  background: transparent;
+  color: inherit;
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.codex-sidebar-zoom-step:hover {
+  background: var(--dsw-alias-interactive-bg-hover, color-mix(in srgb, currentColor 10%, transparent));
+}
+
+.codex-sidebar-zoom-step[data-selected="true"] {
+  border-color: var(--dsw-alias-label-primary, currentColor);
+  font-weight: 600;
+}
+
+.codex-sidebar-zoom-input {
+  width: 62px;
+  padding: 5px 8px;
+  border-radius: var(--dsw-radius-sm, 8px);
+  border: 1px solid var(--dsw-alias-border-l2, color-mix(in srgb, currentColor 18%, transparent));
+  background: transparent;
+  color: inherit;
+  font-size: 12px;
 }
 
 /* 缩放控件行：跟在标题说明下方，左对齐，窄窗口时换行 */

@@ -3,7 +3,7 @@
 DSH（DeepSeek Harness）左侧栏的「日期视图」插件：把会话列表按 **今天 / 昨天 / 星期X / 更早**
 重新分段排列，顶行加一个铃铛按钮切换，齿轮直接跳到官方设置页里的「侧栏设置」。
 
-拿到的是一个**独立插件**，不依赖任何主题或皮肤插件；装了 `dsh-claude-style` 时也能共存（见下）。
+拿到的是一个**独立插件**，不依赖任何主题或皮肤插件；装了 `dsh-claude-style` 时它检测到主题就会让位（见下）。
 
 ![日期视图](docs/screenshot-date-view.png)
 
@@ -15,7 +15,8 @@ DSH（DeepSeek Harness）左侧栏的「日期视图」插件：把会话列表�
 - **铃铛开关**：顶行铃铛切换日期视图；日期视图开着时常亮。有会话在跑时亮一个小绿点（不写数字）。
 - **默认不接管**：装好后侧栏仍是宿主原本的工作区视图，只有按下铃铛才切到日期视图；选择会记住。
 - **屏蔽工作区**：设置页里勾掉的工作区不进日期视图（默认屏蔽标题为 `闲聊` 的工作区）。
-- **整体缩放**：5 个固定档位（85% / 90% / 100% / 110% / 120%）+ 自定义数字框。
+- **整体缩放**：4 个固定档位（80% / 100% / 125% / 150%）+ 自定义数字框（60% ~ 200%），做法与
+  `dsh-claude-style` 的整页缩放一致（详见「整页缩放」）。
 - **设置进官方设置页**：三张卡片（日期视图、屏蔽工作区、整体缩放）注册成官方设置页的一个 section，不是自建浮层。
 - **随界面语言**：段落标题与设置页文案跟随宿主语言（中文 / 英文）。
 
@@ -43,25 +44,37 @@ node scripts/install.mjs --profile codexprobe --uninstall        # 卸
 
 ## 与 dsh-claude-style 的共存
 
-`dsh-claude-style` 主题里内置了一份同样的「铃铛 + 日期分组」特性，而且它接管了侧栏的工作区列表
-渲染。两个插件同时移动同一批座位节点会互相打架，所以本插件按**三种模式**工作，启动后自动判定：
+`dsh-claude-style` 主题里内置了一份同样的「铃铛 + 日期分组」特性，还自带整页缩放（配置项 `pageZoom`，
+桌面 App 里是 115%）。两件事都由主题做完了，本插件在检测到主题时**整体让位**：
 
 | 模式 | 什么时候 | 行为 |
 | --- | --- | --- |
-| `solo` | 没装主题 | 铃铛 + 齿轮，日期视图全功能 |
-| `dormant` | 装了主题、未勾选接管 | 只挂齿轮（不碰列表、不挂铃铛），日期视图用主题自己那个 |
-| `takeover` | 装了主题、勾选「由本插件接管日期视图」 | 藏掉主题的铃铛，由本插件提供日期视图 |
+| `solo` | 没装主题 | 铃铛 + 齿轮，日期视图与缩放全功能 |
+| `dormant` | 装了主题 | 只挂齿轮；日期视图与页面缩放都交给主题，本插件不碰列表、不写任何缩放标记 |
 
-共存开关是设置页第一张卡片里的第二行，只在检测到主题时出现。
+判定只看主题的公开痕迹：`body` 上有 `data-dsh-claude*` 属性，或页面上有 `dsh-claude-` 前缀的类名。
+让位时设置页只显示一句说明（不再提供会改动主题界面的开关）：
 
-### 接管模式为什么要「借」主题的标记
+![主题在场时的本插件设置页](docs/screenshot-theme-notice.png)
 
-主题把侧栏工作区列表换成了自己的 provider，它会盯着分组状态：一旦看到 `flat` 就认为不是自己写的，
-立刻改回工作区。它只在 body 上存在 `data-dsh-claude-date-groups`（它自己日期视图开着的信号）时才放手。
-所以接管时本插件会临时借用这个标记，让 `setGroupBy(flat)` 站住；退出日期视图时原样还回去。
-如果主题当时自己正开着日期视图，会先按一次它的铃铛让它退出，再接管。
+### 为什么不让两边各排各的
 
-![接管模式下的日期视图（装的是 dsh-claude-style）](docs/screenshot-theme-takeover.png)
+- 主题把侧栏工作区列表换成了自己的 provider，会盯着分组状态：一旦看到 `flat` 就认为不是自己写的、
+  立刻改回工作区。两边同时动同一批座位节点，会互相还原 `display`、抢 `groupBy`。
+- 主题的缩放不只是 `zoom`：它还按倍率写页面尺寸变量，并把宿主弹出的浮层按倍率搬位置
+  （`page-scale` 里的 scaled layer）。独立插件复刻不了「搬浮层」那一层，硬接管只会让浮层错位。
+
+## 整页缩放
+
+和 `dsh-claude-style` 用同一套做法，**绝不写 `body.style.zoom`**：
+
+1. `body[data-codex-sidebar][data-codex-sidebar-page-zoom]` 上 `zoom: var(--codex-sidebar-page-zoom-factor)`；
+2. 非 100% 时同时写 `--codex-sidebar-page-width/height`（`innerWidth/倍率`），给宿主浮层当封顶尺寸；
+3. 设置页等 `:is(dialog,[role="dialog"])` 用页面尺寸封顶，缩放后不会溢出窗口。
+
+之前那版直接写 `body.style.zoom`：有主题时它会把主题的 115% 行内覆盖成 100%，页面按 100% 画、
+主题却仍按 1.15 写尺寸变量，于是右侧/底部空出一条，输入框光标与浮层整体偏移。现在改成样式表 + 变量后，
+两种宿主都不再出现这个问题（实测见「验证」）。
 
 ## 设置与持久化
 
@@ -71,8 +84,7 @@ node scripts/install.mjs --profile codexprobe --uninstall        # 卸
 | --- | --- | --- | --- |
 | `dateViewEnabled` | boolean | `false` | 启动时是否直接进日期视图；按铃铛会改写它 |
 | `skipWorkspaces` | string[] | `["闲聊"]` | 不进日期视图的工作区**标题** |
-| `zoom` | number | `1` | 整体缩放倍率（0.6 ~ 1.6） |
-| `takeoverWithTheme` | boolean | `false` | 装了主题时是否由本插件接管日期视图 |
+| `zoom` | number | `1` | 整页缩放倍率（0.6 ~ 2；只在不装主题时生效） |
 
 进入日期视图时宿主的分组方式会被切到 `flat`，原分组方式备份在
 `localStorage["dsh-codex-sidebar.group-before-date-view"]`。进程被强杀导致残留扁平分组时，
@@ -89,8 +101,8 @@ npm run watch     # 持续构建
 
 | 文件 | 职责 |
 | --- | --- |
-| `src/entry.js` | 组装、MutationObserver 调度、三种共存模式的统一判定、启动自愈、卸载还原 |
-| `src/constants.js` | 选择器、属性名、默认设置、档位 |
+| `src/entry.js` | 组装、MutationObserver 调度、`solo` / `dormant` 判定、整页缩放、启动自愈、卸载还原 |
+| `src/constants.js` | 选择器、属性名、默认设置、缩放档位与变量名 |
 | `src/host-data.js` | 只读宿主 `sessions` / `workspaces` 服务 |
 | `src/view-store.js` | 宿主侧栏视图 store：切扁平 / 还原分组 / 备份 |
 | `src/sidebar-dom.js` | 侧栏 DOM 定位（`data-row-key`、座位 span、顶行） |
@@ -99,9 +111,9 @@ npm run watch     # 持续构建
 | `src/settings-section.js` | 注册进官方设置页的 section 组件（日期视图 / 屏蔽工作区 / 缩放） |
 | `src/open-settings.js` | 齿轮：打开官方设置页并跳到本插件那一页 |
 | `src/settings.js` | localStorage 读写与订阅 |
-| `src/locale.js` | 语言判定与文案 |
-| `src/coexist.js` | 主题检测、模式判定、借用/退出主题日期视图 |
-| `src/styles.js` | 插件自带样式（只给自有节点写样式） |
+| `src/locale.js` | 语言判定（读 locale 服务的 `active` 字段）与文案 |
+| `src/coexist.js` | 主题检测（只看公开痕迹） |
+| `src/styles.js` | 插件自带样式（自有节点 + 整页缩放规则） |
 
 ### 验证
 
@@ -119,9 +131,9 @@ env -u all_proxy -u ALL_PROXY -u http_proxy -u HTTP_PROXY -u https_proxy -u HTTP
   node .debug/verify.mjs "$URL" <探针.mjs> <截图.png>
 ```
 
-现成的探针：`.debug/eval-solo.js`（无主题，日期视图进出 + 设置页缩放）、`.debug/eval-theme.js`（装主题，dormant → takeover）、
-`.debug/eval-theme-dismiss.js`（主题日期视图正开着时接管）、`.debug/eval-section-flow.js`（无主题的设置页全流程）、
-`.debug/eval-theme-section.js`（有主题的设置页 + 接管）。
+现成的探针：`.debug/eval-solo.js`（无主题：日期视图进出）、`.debug/eval-zoom.js`（两种宿主的整页缩放）、
+`.debug/eval-section-flow.js`（无主题的设置页全流程）、`.debug/eval-theme-notice.js`（有主题：设置页只剩说明）、
+`.debug/test-locale.mjs`（语言判定单测，`node` 直接跑）。
 
 注意：token 一次性，每轮验证都要重启服务拿新 URL；环境里的 socks5 代理会掐断 WebSocket，必须
 `env -u` 掉那几个变量。
@@ -130,8 +142,9 @@ env -u all_proxy -u ALL_PROXY -u http_proxy -u HTTP_PROXY -u https_proxy -u HTTP
 
 - 依赖宿主的 DOM 契约（`data-row-key`、`[data-slot="sidebar"]`、侧栏视图 store 的 `setGroupBy`），
   宿主大改版可能失效；类名是哈希的，只在兜底时才按子串匹配。
-- 接管模式依赖 `dsh-claude-style` 的公开标记（`data-dsh-claude-date-groups`）与它的铃铛选择器；
-  主题改版可能失效，失效时退化为 `dormant`（设置页里取消勾选即可）。
+- 装了 `dsh-claude-style` 时本插件只保留齿轮与说明页（日期视图与缩放归主题）。
+- 整页缩放只顶住宿主弹窗的尺寸（`dialog`/`role="dialog"`）；极端倍率下，宿主没走这套封顶的浮层
+  仍可能压到边上。
 - 折叠成图标栏时不挂按钮（那里没有品牌按钮，硬塞会挤坏布局），展开后自动挂上。
 - 归档视图打开时不进入日期视图（宿主在归档模式下会整体换列表，混排没有意义）。
 - 日期视图里的行内工作区标签是插进宿主行 DOM 的，宿主重渲染后由下一帧补回（肉眼不可见）。

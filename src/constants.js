@@ -17,12 +17,6 @@ export const BODY_ATTR = 'data-codex-sidebar'
 /** 挂在 <body> 上的日期视图标记：日期视图开着时才有。 */
 export const DATE_MODE_ATTR = 'data-codex-sidebar-date-view'
 
-/**
- * 挂在 <body> 上的「接管」标记：检测到 dsh-claude-style 且用户选择由本插件接管时才有。
- * 用来把主题自己的日期铃铛藏掉，避免两个铃铛并排。
- */
-export const TAKEOVER_ATTR = 'data-codex-sidebar-takeover'
-
 /** 设置在本机的存储键（localStorage）。 */
 export const SETTINGS_KEY = 'dsh-codex-sidebar.settings'
 
@@ -34,21 +28,34 @@ export const SETTINGS_KEY = 'dsh-codex-sidebar.settings'
  */
 export const GROUP_BACKUP_KEY = 'dsh-codex-sidebar.group-before-date-view'
 
-/** 默认设置：日期视图默认关闭，默认屏蔽「闲聊」工作区，缩放 1 倍。 */
+/** 默认设置：日期视图默认关闭，默认屏蔽「闲聊」工作区，缩放 100%。 */
 export const DEFAULT_SETTINGS = {
   // 默认不进日期视图：保持宿主原本的工作区视图，按下顶行铃铛才切换。
   dateViewEnabled: false,
   skipWorkspaces: ['闲聊'],
-  zoom: 1,
-  // 装了 dsh-claude-style 时，默认让主题的日期视图说话；用户可在设置里改成由本插件接管。
-  takeoverWithTheme: false
+  zoom: 1
 }
 
-/** 缩放的五个固定档位（设置面板提供快捷按钮，也可直接填数字）。 */
-export const ZOOM_STEPS = [0.85, 0.9, 1, 1.1, 1.2]
+/** 缩放的五个快捷档位（百分比），与设置页按钮一致。 */
+export const ZOOM_STEPS = [0.8, 1, 1.25, 1.5]
 
 /** 缩放的合法区间：太大或太小都会让侧栏错位。 */
-export const ZOOM_RANGE = { min: 0.6, max: 1.6 }
+export const ZOOM_RANGE = { min: 0.6, max: 2 }
+
+/**
+ * 页面缩放的三件套：一个 body 属性、一个倍率变量、一组页面尺寸变量。
+ *
+ * 这是 dsh-claude-style 的做法（theme/chrome.css:146-167、shared/page-zoom.ts）：
+ *   · 属性 data-codex-sidebar-page-zoom 只表示「现在有缩放」，值是倍率文本；
+ *   · 样式表里写 `zoom: var(--codex-sidebar-page-zoom-factor, 1)`；
+ *   · body 按窗口尺寸除以倍率定宽高并 overflow:hidden（页面缩放了，vh/vw 会再乘一次倍率）。
+ * 关键区别：绝不写 body.style.zoom。行内 zoom 是「另一份缩放」，会把主题的
+ * pageZoom 规则整条盖掉（主题仍按 1.15 补偿测量，页面却按 1 绘制，光标与浮层全偏）。
+ */
+export const ZOOM_ATTR = 'data-codex-sidebar-page-zoom'
+export const ZOOM_VAR = '--codex-sidebar-page-zoom-factor'
+export const ZOOM_WIDTH_VAR = '--codex-sidebar-page-width'
+export const ZOOM_HEIGHT_VAR = '--codex-sidebar-page-height'
 
 /** 宿主侧栏根节点。 */
 export const SIDEBAR_SELECTOR = '[data-slot="sidebar"]'
@@ -71,12 +78,3 @@ export const TOGGLE_LABELS = ['collapse sidebar', 'expand sidebar', '收起侧�
 
 /** 本插件自建节点统一带的属性，用来自我识别（观察者据此跳过自己的写入）。 */
 export const OWN_ATTR = 'data-codex-sidebar-owned'
-
-/**
- * dsh-claude-style 的日期视图标记（它自己打的，不是宿主原生的）。
- *
- * - 日期铃铛：主题顶行动作区里的 trigger 按钮，点一下进出它的日期视图；
- * - 日期视图开启时它会给 body 加 date-groups 属性。
- */
-export const THEME_DATE_BELL_SELECTOR = '.dsh-claude-active-shelf-actions button[class*="active-shelf-trigger"]'
-export const THEME_DATE_MODE_ATTR = 'data-dsh-claude-date-groups'

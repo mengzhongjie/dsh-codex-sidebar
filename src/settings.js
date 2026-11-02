@@ -6,7 +6,7 @@
  */
 import { SETTINGS_KEY, DEFAULT_SETTINGS, ZOOM_RANGE } from './constants.js'
 
-/** 订阅者集合：设置变化时通知侧栏与面板。 */
+/** 订阅者集合：设置变化时通知侧栏与设置页。 */
 const listeners = new Set()
 
 /** 把任意输入收敛成合法设置：缺字段补默认值，脏数据不炸。 */
@@ -15,16 +15,12 @@ function normalize(raw) {
   const skip = Array.isArray(source.skipWorkspaces)
     ? source.skipWorkspaces.filter(item => typeof item === 'string' && item.trim() !== '')
     : DEFAULT_SETTINGS.skipWorkspaces.slice()
-  const zoomValue = typeof source.zoom === 'number' && Number.isFinite(source.zoom)
-    ? source.zoom
-    : DEFAULT_SETTINGS.zoom
+  const zoomValue = typeof source.zoom === 'number' && Number.isFinite(source.zoom) ? source.zoom : DEFAULT_SETTINGS.zoom
   return {
     dateViewEnabled: typeof source.dateViewEnabled === 'boolean' ? source.dateViewEnabled : DEFAULT_SETTINGS.dateViewEnabled,
     skipWorkspaces: skip,
-    // 缩放限制在合法区间内，避免手填 0 或 10 把界面搞坏。
-    zoom: Math.min(ZOOM_RANGE.max, Math.max(ZOOM_RANGE.min, zoomValue)),
-    // 装了主题时是否由本插件接管日期视图。
-    takeoverWithTheme: typeof source.takeoverWithTheme === 'boolean' ? source.takeoverWithTheme : DEFAULT_SETTINGS.takeoverWithTheme
+    // 缩放夹在合法区间内：手填 0 或 10 会把界面搞坏。
+    zoom: Math.min(ZOOM_RANGE.max, Math.max(ZOOM_RANGE.min, zoomValue))
   }
 }
 

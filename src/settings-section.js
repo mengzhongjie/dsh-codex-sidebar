@@ -7,6 +7,9 @@
  *
  * 版式对齐官方设置页：内容列已经带左右 24px 内边距，这里只画卡片与行，
  * 卡片 20px 圆角 + 发丝描边，行间 0.5px 分隔线。
+ *
+ * 装了 dsh-claude-style 时本插件让位：日期排列与页面缩放都由主题负责，
+ * 这一页只说明现状，不提供会改动主题界面的开关。
  */
 import { createElement as h, useEffect, useState } from 'react'
 import { ZOOM_RANGE, ZOOM_STEPS } from './constants.js'
@@ -130,15 +133,21 @@ export function createSettingsSection({ hostData, copy }) {
       setZoomDraft(String(Math.round(zoom * 100)))
     }
 
-    // 主题检测放在渲染期：用户可能在别的页面切主题，下次进设置页就能看到接管开关。
-    const theme = themePresent()
+    // 主题检测放在渲染期：用户可能在别的页面停用主题，下次进设置页就能看到开关。
+    if (themePresent()) {
+      return h(
+        'div',
+        { className: 'codex-sidebar-settings' },
+        h('p', { className: 'codex-sidebar-settings-intro' }, copy.themeNoticeDesc)
+      )
+    }
 
     return h(
       'div',
       { className: 'codex-sidebar-settings' },
       h('p', { className: 'codex-sidebar-settings-intro' }, copy.settingsIntro),
 
-      // 卡片一：日期视图，装了主题时多一行「谁来提供」。
+      // 卡片一：日期视图开关。
       h(
         'div',
         { className: 'codex-sidebar-settings-card' },
@@ -147,15 +156,7 @@ export function createSettingsSection({ hostData, copy }) {
           desc: copy.dateViewHint,
           checked: settings.dateViewEnabled,
           onChange: value => writeSettings({ dateViewEnabled: value })
-        }),
-        theme
-          ? h(SwitchRow, {
-              title: copy.takeoverLabel,
-              desc: copy.takeoverHint,
-              checked: settings.takeoverWithTheme,
-              onChange: value => writeSettings({ takeoverWithTheme: value })
-            })
-          : null
+        })
       ),
 
       // 卡片二：哪些工作区不进入日期视图。
@@ -194,8 +195,8 @@ export function createSettingsSection({ hostData, copy }) {
         )
       ),
 
-      // 卡片三：整体缩放（五档 + 自定义）。
-      // 控件比说明宽，单项行放不下，所以标题在上、控件另起一行左对齐。
+      // 卡片三：整体缩放。档位与 dsh-claude-style 的页面缩放一致（80/100/125/150），
+      // 另给自定义输入；缩放方式见 constants.js 里的 ZOOM_* 说明。
       h(
         'div',
         { className: 'codex-sidebar-settings-card' },
@@ -234,6 +235,7 @@ export function createSettingsSection({ hostData, copy }) {
               max: Math.round(ZOOM_RANGE.max * 100),
               step: 5,
               'aria-label': copy.zoomCustom,
+              title: copy.zoomCustomHint,
               value: zoomDraft,
               onChange: event => setZoomDraft(event.target.value),
               onBlur: commitZoom,
