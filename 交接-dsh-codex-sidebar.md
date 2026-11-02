@@ -350,3 +350,48 @@ esbuild 报 `src/styles.js:416:1: ERROR: Unterminated string literal`；补回�
 真机效果要等桌面 App 重启后看（本机 profile 里 superagent 的 stateDir 被运行中的 App 占着，
 第二个实例起不来，没法在探针里跑真数据）。
 
+## 2026-11-02 20:20 按交接文档修 bug（本轮）
+
+用户指令：按交接文档修 bug，不再推进旧任务。本轮做了四件事。
+
+### 1. 死代码清理（交接文档「遗留清理项」四项全清）
+- `src/styles.js`：删第 233~408 行约 175 行旧设置页样式（`.codex-sidebar-settings*`、`-switch*`、`-check*`）。
+- `src/locale.js`：删 9 个无引用死键（`settingsTitle`、`skipSection`、`skipHint`、`settingsIntro`、
+  `dateViewHint`、`themeNoticeDesc`、`emptyWorkspaces`、`untitled`、`skipped`），只留
+  `today/yesterday/earlier/weekdays/ungrouped/mainSession/toggleDateView`。
+- `src/constants.js`：错位的 `DATE_MODE_ATTR` 注释归位；`DEFAULT_SETTINGS` 去掉 `skipWorkspaces`
+  （现只剩 `dateViewEnabled: false`）。
+- `src/settings.js`：`normalize` 只保留 `dateViewEnabled`。
+- `src/host-data.js`：合并 `previewBySession()` 上方重复的 JSDoc。
+- `src/entry.js`：删陈旧设置页注释。
+
+### 2. 预览里的 markdown 记号（真 bug，已修）
+根因：宿主 `projectionsBySession[id].values.turnOutline.response` 每条都是**单行且已截断到 120 字符**，
+所以 `src/preview-text.js` 里所有 `/^…/gm` 行首规则都命中不到，中段的 `## 标题`、`|---|---|`、`> ` 原样留在预览里。
+修法：在「列表记号」规则之前加四条**中段**规则（井号要求前为空白/行首且后跟空白，避免误伤 C# 与 issue #216；
+表格分隔行压成空格；`---` 分割线；引用记号）。离线单测 `.debug/test-preview.mjs` 五例全过，
+真机 `previewMarkdownDirty` 由 5 降到 2，剩下 2 条是探针误报（`#216`、`issue #97074` 属正常文字）。
+
+### 3. 20 行会话悬在第一个日期标题之前（真 bug，已修）
+现象：消息视图里 20 个座位排在「优先级」标题前面（flatList 62 个孩子：前 20 个座位、第 21 个才是标题）。
+根因：`arrange()` 里对 superagent 自家会话（`worker-` / `orchestrator-` 前缀）无条件 `continue`。
+但「跳过」这个判断只在**装了 superagent** 的宿主才成立 —— 那里对面自己把这些行写成 `display:none`；
+没装 superagent 的宿主里这些 id 只是普通会话、行没人藏，跳过后它们既可见又不进任何段落。
+修法：
+- `src/superagent.js` 增 `available: () => checkedAt !== 0`（状态路由至少成功回过一次才算「装了」）。
+- `src/date-view.js` 的让位条件加上 `superagentAvailable(superagent)`；若确实要跳过而该行还可见
+  （对面还没动手），我们自己写 `display:none` 并记进 `leashedSeats`，退出消息视图时只还原自己改过的行，
+  不动对面已经藏好的行。
+
+### 4. 清理与验证
+- `.debug` 里一次性探针（probe-order / probe-sequence / probe-seat-classes 等）已删，只留 `verify.mjs` 与 `probe-cycle.mjs`。
+- 两个隔离环境（`.testhome` 的 webclean 49830 / webtheme 49840）实测：铃铛点开 → 6 段
+  `[Priority, Yesterday, Saturday, Friday, Tuesday, Earlier]`、第一个孩子就是标题、**悬空行 0**、
+  55 个可见座位（27/21/3/1/1/2）、工作区行 0；再点一次 → 标题与标签清空、工作区行回到 11、
+  `stored = {"dateViewEnabled": false}`；控制台只有 `[codex-sidebar] applied` 与既有 404。
+
+### 5. 待办（本机限制）
+`lib/client.js` 这次**还没有覆盖**：桌面 App 正在运行（进程 98662，19:38 启动），
+在 App 运行时重写仓库里的 `lib/client.js` 会触发宿主热重载踩空
+（`DesktopHostFatalError: cannot create effect on inactive context`，已踩过两次）。
+正确顺序：退出 App（Cmd+Q，关窗不退进程）→ `node scripts/build.mjs` → 重新打开 App。

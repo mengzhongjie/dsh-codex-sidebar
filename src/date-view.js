@@ -45,6 +45,18 @@ function bucketOf(updatedAt, now, copy) {
   return { text: copy.earlier, rank: 7 }
 }
 
+/**
+ * superagent 是否真的装在这个宿主里。
+ *
+ * 只有它的状态路由至少成功回过一次，才说明 worker-/orchestrator- 这些 id 真是它的内部会话、
+ * 行也被它自己藏起来了，我们跳过才算让位。没装 superagent 的宿主里，这些 id 只是普通
+ * 会话，行没人藏；再跳过就会让它们可见却不进任何日期段落（实测有 20 行悬在列表最前）。
+ */
+function superagentAvailable(superagent) {
+  if (superagent === null || superagent === undefined) return false
+  return superagent.available?.() === true
+}
+
 /** 建一个段落标题节点（属于本插件，带 OWN_ATTR 供观察者跳过）。 */
 function createHeader(text) {
   const header = document.createElement('div')
@@ -70,6 +82,12 @@ export function createDateView({ hostData, viewStore, locale, refreshBell, prepa
 
   /** 被隐藏的座位：退出时要还原 display。 */
   const hiddenSeats = new Set()
+  /**
+   * 我们替 superagent 藏起来的座位（它自己的 worker-/orchestrator- 会话）。
+   * 对面正常时会把行内 display 写成 none，我们只需绕开；只有它还没动手时我们才自己藏，
+   * 这些行记在这里，退出消息视图时只还原我们改过的，不去动对面藏好的行。
+   */
+  const leashedSeats = new Set()
 
   /**
    * 挂上主会话标记的座位。
@@ -376,7 +394,17 @@ export function createDateView({ hostData, viewStore, locale, refreshBell, prepa
         // superagent 自己的会话默认不进消息视图：worker- 是工单执行者，其它 orchestrator-
         // 是评估跑批，都是它的内部事务；只有主会话要露出来（否则拍平后它连入口都没有）。
         // 这里不改它们的 display：对面已经写成 none，我们不去改写，免得两边互激。
-        if (superagent !== undefined && superagent !== null && !isMain && superagent.isOwnSessionId(sessionId)) continue
+        // 但只有确认这个宿主里装了 superagent（available）才让位：没装的环境里这些 id
+        // 只是普通会话，行也没人藏，跳过它们会让这些行永远不进段落（实测 20 行悬在最前）。
+        if (superagentAvailable(superagent) && !isMain && superagent !== null && superagent !== undefined && superagent.isOwnSessionId(sessionId)) {
+          // 对面通常已经把这行藏好了；万一还没（刚装好、还没轮询到），我们自己藏一下并记账，
+          // 否则它会可见却又不进任何日期段落，永远悬在列表最前面。
+          if (seat.style.display !== 'none') {
+            seat.style.display = 'none'
+            leashedSeats.add(seat)
+          }
+          continue
+        }
         // 主会话固定进「优先级」段落并排在最前：它是这个工作区的对话入口，不该按时间沉下去。
         const bucket = isMain ? { text: copy.today, rank: 0 } : (running ? { text: copy.today, rank: 0 } : bucketOf(time, now, copy))
         if (isMain) {
@@ -385,6 +413,8 @@ export function createDateView({ hostData, viewStore, locale, refreshBell, prepa
         } else {
           if (seat.classList.contains(MAIN_SESSION_CLASS)) seat.classList.remove(MAIN_SESSION_CLASS)
           if (seat.style.display !== '') seat.style.display = ''
+          // 这一轮它又走正常流程了（比如对面没装/刚卸载），不再需要我们替它藏。
+          leashedSeats.delete(seat)
         }
         visible.push({ seat, row, sessionId, time, running, isMain, bucket, workspace })
       }
@@ -519,6 +549,8 @@ export function createDateView({ hostData, viewStore, locale, refreshBell, prepa
     mainSeats.clear()
     for (const seat of hiddenSeats) seat.style.display = ''
     hiddenSeats.clear()
+    for (const seat of leashedSeats) seat.style.display = ''
+    leashedSeats.clear()
     viewStore.restore(previousGroupBy)
     viewStore.forgetBackup()
     previousGroupBy = null

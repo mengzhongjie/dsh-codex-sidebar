@@ -93,8 +93,6 @@ function applyUnsafe(ctx) {
     refreshBell: () => topbar?.refreshBell()
   })
 
-  // 设置界面直接住进官方设置页，不再自己画浮层。
-
   topbar = createTopbar({
     dateView,
     hostData,

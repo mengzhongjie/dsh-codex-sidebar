@@ -17,40 +17,21 @@ const LABELS = {
     yesterday: '昨天',
     earlier: '更早',
     weekdays: ['星期日', '星期一', '星期二', '星期三', '星期四', '星期五', '星期六'],
-    untitled: '未命名',
-    skipped: '不进入消息视图',
     // 未归入任何工作区的会话在消息视图里的标签
     ungrouped: '未分组',
     // 消息视图里 superagent 主会话那一行的标签
     mainSession: '主会话',
-    settingsTitle: '侧栏设置',
-    toggleDateView: '消息视图',
-    skipSection: '不进入消息视图的工作区',
-    // 设置页（官方设置页里的一页）
-    settingsIntro: '侧栏按消息分段排列、工作区屏蔽。改动即时生效。',
-    dateViewHint: '按优先级 / 昨天 / 星期几 / 更早分段排列会话，点顶行铃铛随时切换。',
-    skipHint: '勾选的工作区里的会话不会出现在消息视图，工作区视图不受影响。',
-    emptyWorkspaces: '还没有工作区',
-    // 装了 dsh-claude-style 时的说明（本插件让位，不改主题界面）
-    themeNoticeDesc: '检测到 dsh-claude-style：侧栏的日期排列与页面缩放都由主题负责，本插件不修改主题的界面。停用主题后，本插件会自动接管日期视图与缩放。'
+    // 顶行铃铛的 tooltip（也是它的 aria-label）
+    toggleDateView: '消息视图'
   },
   en: {
     today: 'Priority',
     yesterday: 'Yesterday',
     earlier: 'Earlier',
     weekdays: ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'],
-    untitled: 'Untitled',
-    skipped: 'Hidden from message view',
     ungrouped: 'Ungrouped',
     mainSession: 'Main session',
-    settingsTitle: 'Sidebar settings',
-    toggleDateView: 'Message view',
-    skipSection: 'Workspaces hidden from message view',
-    settingsIntro: 'Message grouping for the sidebar and hidden workspaces. Changes apply immediately.',
-    dateViewHint: 'Groups sessions into Priority / Yesterday / weekday / Earlier. Toggle from the bell at the top of the sidebar.',
-    skipHint: 'Sessions in checked workspaces are left out of the message view. The workspace view is unaffected.',
-    emptyWorkspaces: 'No workspaces yet',
-    themeNoticeDesc: 'dsh-claude-style is installed: it provides the sidebar date grouping and page zoom, and this plugin does not modify its UI. Disable the theme and this plugin takes over both.'
+    toggleDateView: 'Message view'
   }
 }
 

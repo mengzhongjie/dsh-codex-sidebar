@@ -97,6 +97,13 @@ export function createSuperagentBridge({ onChange }) {
     ids: () => masters,
     /** 这个 id 是不是 superagent 自己的会话（worker- / orchestrator-）。 */
     isOwnSessionId: isSuperagentSessionId,
+    /**
+     * 这个宿主里到底有没有装 superagent。
+     * 判据是「状态路由至少成功回过一次」：只有这时它的会话行才真的被别人藏起来，
+     * 我们跳过它们才是让位；没装的环境里 worker-/orchestrator- 只是普通会话，
+     * 跳过它们会让这些行永远不进日期段落（实测有 20 行这样悬在列表最前面）。
+     */
+    available: () => checkedAt !== 0,
     ensure,
     /** 停掉后台查询。 */
     dispose() {

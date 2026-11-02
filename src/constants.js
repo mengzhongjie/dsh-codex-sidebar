@@ -14,7 +14,6 @@ export const LOG_PREFIX = '[codex-sidebar]'
 /** 挂在 <body> 上的插件标记，CSS 与自检脚本都读它。 */
 export const BODY_ATTR = 'data-codex-sidebar'
 
-/** 挂在 <body> 上的日期视图标记：日期视图开着时才有。 */
 /**
  * 悬停滑动的裁剪类名。
  *
@@ -23,6 +22,7 @@ export const BODY_ATTR = 'data-codex-sidebar'
  */
 export const MARQUEE_CLASS = 'codex-sidebar-marquee'
 
+/** 挂在 <body> 上的消息视图标记：消息视图开着时才有。 */
 export const DATE_MODE_ATTR = 'data-codex-sidebar-date-view'
 
 /**
@@ -47,11 +47,13 @@ export const SETTINGS_KEY = 'dsh-codex-sidebar.settings'
  */
 export const GROUP_BACKUP_KEY = 'dsh-codex-sidebar.group-before-date-view'
 
-/** 默认设置：消息视图默认关闭，默认屏蔽「闲聊」工作区。 */
+/**
+ * 默认设置。
+ *
+ * 只有一项：消息视图默认关闭 —— 保持宿主原本的工作区视图，按下顶行铃铛才切换。
+ */
 export const DEFAULT_SETTINGS = {
-  // 默认不进消息视图：保持宿主原本的工作区视图，按下顶行铃铛才切换。
-  dateViewEnabled: false,
-  skipWorkspaces: ['闲聊']
+  dateViewEnabled: false
 }
 
 /** 宿主侧栏根节点。 */

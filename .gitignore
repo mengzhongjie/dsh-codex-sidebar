@@ -9,6 +9,9 @@ node_modules/
 shots/
 .prwork/
 
+# 构建暂存副本：桌面 App 运行中不能重写 lib/client.js，改在这里构建验证
+.buildtest/
+
 # 隔离的浏览器测试 home（.debug/setup-web-profiles.mjs 建）
 .testhome/
 

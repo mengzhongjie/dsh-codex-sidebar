@@ -15,12 +15,8 @@ let memorySettings = null
 /** 把任意输入收敛成合法设置：缺字段补默认值，脏数据不炸。 */
 function normalize(raw) {
   const source = raw !== null && typeof raw === 'object' ? raw : {}
-  const skip = Array.isArray(source.skipWorkspaces)
-    ? source.skipWorkspaces.filter(item => typeof item === 'string' && item.trim() !== '')
-    : DEFAULT_SETTINGS.skipWorkspaces.slice()
   return {
-    dateViewEnabled: typeof source.dateViewEnabled === 'boolean' ? source.dateViewEnabled : DEFAULT_SETTINGS.dateViewEnabled,
-    skipWorkspaces: skip
+    dateViewEnabled: typeof source.dateViewEnabled === 'boolean' ? source.dateViewEnabled : DEFAULT_SETTINGS.dateViewEnabled
   }
 }
 
