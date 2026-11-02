@@ -13,3 +13,5 @@ node_modules/
 .debug/*.txt
 .debug/*.log
 shots/
+
+.prwork/
