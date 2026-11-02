@@ -152,23 +152,12 @@ body[data-codex-sidebar] :is(dialog, [role="dialog"]) {
  * 行高改为自适应；时间在消息视图里已经被隐藏，第一行只剩图标 + 标题 + 标签。
  */
 [data-codex-sidebar-date-view] [data-row-key^="session:"] {
-  flex-wrap: wrap !important;
-  height: auto !important;
-  min-height: 32px !important;
+  flex-wrap: wrap;
+  height: auto;
+  min-height: 32px;
   row-gap: 1px;
   padding-top: 6px;
   padding-bottom: 6px;
-}
-
-/*
- * 装了 dsh-claude-style 时它给会话行写了固定高度（实测 28px），且优先级高于上面那条选择器，
- * 结果第二行预览溢出到下一行标题上、字叠字。这里补一条同一属性、三个属性选择器的写法并加
- * !important：只有在「宿主 + 主题」同时命中时才有额外权重，solo 环境不受影响。
- */
-[data-codex-sidebar-date-view] [data-slot="sidebar"] [data-row-key^="session:"] {
-  height: auto !important;
-  min-height: 32px !important;
-  flex-wrap: wrap !important;
 }
 
 /*

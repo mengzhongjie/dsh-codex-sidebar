@@ -3,7 +3,8 @@
  *
  * 位置：宿主「工作区」那一行的图标组里（找不到才退回顶行）。
  * 内容永远是「铃铛 + 齿轮」两个按钮：
- *   · 铃铛：始终切换本插件的消息视图；有 dsh-claude-style 时先让它退出自己的日期视图。
+ *   · 铃铛：无主题时切我们自己的日期视图；有 dsh-claude-style 时委派给它自己的铃铛
+ *     （两套日期视图搬的是同一批行，只能有一套真正在动）。
  *   · 齿轮：打开官方设置页并切到「侧栏设置」那一页。
  * 折叠成图标栏（侧栏过窄）时不挂，展开后自动补上。
  */
@@ -35,11 +36,15 @@ function createIconButton(label, svg) {
  * @param onToggle   铃铛切换后的回调（用于持久化开关）
  * @param getLabels  取按钮文案的函数（宿主语言可能晚就绪，每次用都重新问）
  * @param showBell   是否显示铃铛（默认显示；隐藏只用于临时调试）
+ * @param onBellClick 外部接管铃铛点击：返回 true 表示已处理（有主题时委派给主题的铃铛）
+ * @param bellPressed 按下态来源：默认读我们自己的日期视图，委派时读主题铃铛的 aria-pressed
  */
 export function createTopbar({
   dateView,
   hostData,
   onToggle,
+  onBellClick,
+  bellPressed,
   getLabels,
   showBell = true
 }) {
@@ -55,7 +60,8 @@ export function createTopbar({
   /** 铃铛旁的小绿点：有会话在跑就亮。 */
   function refreshBell() {
     if (bell === null) return
-    const active = dateView.isActive()
+    // 按下态可能来自主题的铃铛（委派模式），所以让外部提供，默认才是我们自己的状态。
+    const active = typeof bellPressed === 'function' ? bellPressed() === true : dateView.isActive()
     bell.setAttribute('aria-pressed', active ? 'true' : 'false')
     const running = hostData.hasRunningSession()
     if (running && dot === null) {
@@ -72,15 +78,15 @@ export function createTopbar({
   /** 造铃铛节点并接上事件。 */
   function createBell() {
     const button = createIconButton(getLabels().toggleDateView, BELL_SVG)
-    // 铃铛长在宿主的「工作区」标题行里，而那一行自己带折叠/展开行为（处理挂在祖先上）。
-    // 拦下指针事件，否则点铃铛会顺带把整组工作区收起来——这正是「按铃铛收起了工作区」。
-    for (const type of ['pointerdown', 'mousedown', 'pointerup', 'mouseup']) {
-      button.addEventListener(type, event => event.stopPropagation())
-    }
     button.addEventListener('click', event => {
       event.preventDefault()
       event.stopPropagation()
-      // 铃铛永远切本插件的消息视图：主题那颗只负责它自己的日期视图，不再被委派。
+      // 有主题时把这次点击交给主题自己的铃铛：它才是当前真正在动的日期视图。
+      if (typeof onBellClick === 'function' && onBellClick() === true) {
+        // 主题的按钮可能被我们藏起来了（display:none），改完状态要重新读一次按下态。
+        refreshBell()
+        return
+      }
       dateView.toggle()
       // 记住这次选择：下次启动按上次的状态来。
       onToggle?.(dateView.isActive())

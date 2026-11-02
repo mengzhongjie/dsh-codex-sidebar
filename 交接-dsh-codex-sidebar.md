@@ -166,3 +166,14 @@
 - 修复：`src/styles.js` 两条规则都加 `!important`，并补一条三属性选择器 `[data-codex-sidebar-date-view] [data-slot="sidebar"] [data-row-key^="session:"]`（同一组 height/min-height/flex-wrap），只在宿主+主题同时命中时提高权重，solo 环境行为不变。
 - 实测（Playwright headless，1440×900，43 行）：codextheme previewOverflow=0、seatOverlaps=0（修前预览越过座位底边）、段落仍 6 段；codexprobe 同样 0/0。截图 `.debug/shot-theme-overlap.png`、`.debug/shot-solo-overlap.png`。
 - 探针：`.debug/probe-overlap.mjs`（行列几何）、`.debug/probe-rules.mjs`（规则扫描）、`.debug/probe-height.mjs`（行内 height auto 验证）、`.debug/probe-overlap2.mjs`（相邻座位/预览越界计数）。
+
+## 2026-11-02 崩溃与回滚（重要）
+
+- 现象：17:53-17:54 桌面 App 崩溃重启两次。
+- 崩溃日志（~/Library/Logs/DeepSeek Harness）：
+  - crash-2026-11-02T09-53-48-937Z-main.log：`DesktopHostFatalError: cannot create effect on inactive context`，栈在 `app.asar/lib/main.js:3831` → `dsh-desktop-host/lib/index.js:83` → cordis `Fiber._reload`。
+  - crash-2026-11-02T09-54-06-995Z / 09-54-19-349Z -web-boot.log：`Error: web boot: 19 entries did not activate`，全部卡在等待 `uiWorkspace` / `uiConversation`。
+- 时间线：这几条日志正好落在我连续重建 `lib/client.js`（17:37 / 17:44 / 17:52 / 17:55）之后，且 App 主进程当时正开着并 link 指向本仓库 —— 高度怀疑是「插件 bundle 在运行中被替换」触发宿主热重载（cordis reload）时上下文已失效，属于宿主 reload 路径的报错，不是我们代码里显式抛的异常。
+- 处置：`git checkout 5788b88 -- src lib` 回滚到 5788b88（最后一次在真实 App 里稳定跑了半小时的版本，`lib/client.js` 67655 B），未完成的改动全部 `git stash`（stash@{0}「wip: 预览 markdown 清理 + 悬停图标收敛 + 撤销 marquee（崩溃后暂存）」）。
+- 回滚后验证（desktopmirror 49820，含主题链路）：控制台只有 `[codex-sidebar] applied (en)`，无 pageerror；点铃铛 → 6 段标题（Priority/Yesterday/…）、可见 43 行、工作区行 0、主题日期标题 0。
+- 教训：App 运行时不要重建 `lib/client.js`；要改就先改源码，等用户 Cmd+Q 之后再构建，或临时从 desktop 的 bundles 里摘掉本插件。
