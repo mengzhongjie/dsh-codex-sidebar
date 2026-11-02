@@ -21,6 +21,8 @@ const LABELS = {
     skipped: '不进入消息视图',
     // 未归入任何工作区的会话在消息视图里的标签
     ungrouped: '未分组',
+    // 消息视图里 superagent 主会话那一行的标签
+    mainSession: '主会话',
     settingsTitle: '侧栏设置',
     toggleDateView: '消息视图',
     skipSection: '不进入消息视图的工作区',
@@ -40,6 +42,7 @@ const LABELS = {
     untitled: 'Untitled',
     skipped: 'Hidden from message view',
     ungrouped: 'Ungrouped',
+    mainSession: 'Main session',
     settingsTitle: 'Sidebar settings',
     toggleDateView: 'Message view',
     skipSection: 'Workspaces hidden from message view',

@@ -320,3 +320,33 @@ esbuild 报 `src/styles.js:416:1: ERROR: Unterminated string literal`；补回�
 - `~/.dsh/profiles/desktop` 的软链接与补丁均已指向最新版本。
 - 桌面 App 关窗不退进程，用户在需要时使用 **Cmd+Q** 彻底退出并重启 App 即可加载最新 0.2.0 bundle。
 
+## 2026-11-02 20:35 与 dsh-superagent 配合：主会话进入「优先级」
+
+用户要求：对 superagent 插件做适配，主会话也应该进入优先级栏目。
+
+对面怎么做的（读 `dsh-superagent/lib/client.js` 的 `installMainSessionEntry`）：
+- 主会话（`orchestrator-` 开头的会话）的行被写成行内 `display: none` 藏起来，
+  改在每个工作区组标题上挂一颗 M 气泡（`data-main-session-entry`）当入口；
+- 它另有一个 `MutationObserver` 盯着 `document.body`，每次变动都重跑 `hide(hidden)`，
+  `hidden` 就是 `/orchestrator/api/state` 返回的 `masterIds`。
+
+后果：本插件把列表拍平后组标题没了，M 气泡一起消失，主会话彻底没有入口。
+
+适配做法（`src/superagent.js` + `src/date-view.js`）：
+- 新模块 `createSuperagentBridge`：带 `x-orchestrator-request: 1` 去问
+  `/orchestrator/api/state`，把 `masterId` 与 `masterIds` 合成集合；5s 刷新、失败 30s 退避、
+  连续 3 次失败就认定没装 superagent。
+- 主会话的座位挂 `codex-sidebar-main-session` 类，样式表用
+  `display: flex !important` 把行顶回可见；**行内保持 `none` 不动** ——
+  对面只在「行内不是 none」时才动手，于是它认为早就藏好、不再来改写，
+  不会变成「你写我改」的观察者互激。
+- 主会话固定落在「优先级」段落最前，行内标签写「主会话」（`copy.mainSession`）。
+- superagent 自己的其它会话（`worker-` 执行者、其它 `orchestrator-` 评估）照样不进列表：
+  原来是我们把它们的 `display` 从 none 改回可见，现在直接跳过、不碰它们的样式。
+
+验证：两个隔离环境（webclean / webtheme）点铃铛后 6 段、座位 56 / 55、重叠 0、无新报错；
+用探针造一行 `data-row-key="session:orchestrator-probe"` 并写行内 `display:none`，
+带类时计算值 `flex`、可见；不带类的对照仍是 `none` —— 顶回可见的机制成立。
+真机效果要等桌面 App 重启后看（本机 profile 里 superagent 的 stateDir 被运行中的 App 占着，
+第二个实例起不来，没法在探针里跑真数据）。
+

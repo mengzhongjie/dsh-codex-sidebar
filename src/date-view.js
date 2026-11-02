@@ -6,7 +6,7 @@
  * 每一行补一个工作区标签（扁平后没有分组标题，靠标签回忆归属）。
  * 被屏蔽的工作区、未分组会话只隐藏不删除。退出时还原顺序、标签与分组方式。
  */
-import { DATE_MODE_ATTR, OWN_ATTR, MARQUEE_CLASS } from './constants.js'
+import { DATE_MODE_ATTR, OWN_ATTR, MARQUEE_CLASS, MAIN_SESSION_CLASS } from './constants.js'
 import { labelsFor } from './locale.js'
 import { findFlatList, findSidebar, collectSeats, rowOfSeat, sessionIdOfRow } from './sidebar-dom.js'
 
@@ -54,7 +54,7 @@ function createHeader(text) {
   return header
 }
 
-export function createDateView({ hostData, viewStore, locale, refreshBell, prepareEnable, afterDisable }) {
+export function createDateView({ hostData, viewStore, locale, refreshBell, prepareEnable, afterDisable, superagent }) {
   /**
    * 取当前用词表。
    *
@@ -70,6 +70,14 @@ export function createDateView({ hostData, viewStore, locale, refreshBell, prepa
 
   /** 被隐藏的座位：退出时要还原 display。 */
   const hiddenSeats = new Set()
+
+  /**
+   * 挂上主会话标记的座位。
+   *
+   * 这些行的行内 display 由 superagent 写成 none，可见性来自样式表的 !important 规则，
+   * 退出时只要摘掉类就行，不要动行内 display —— 一动手就成了「谁先写谁后写」的争抢。
+   */
+  const mainSeats = new Set()
 
   /** 自建标题节点，退出时统一删除。 */
   const headers = new Set()
@@ -335,6 +343,9 @@ export function createDateView({ hostData, viewStore, locale, refreshBell, prepa
     applying = true
     try {
       const copy = readCopy()
+      // 问一次 superagent 的主会话 id（有缓存，查不到就是空集，不影响正常宿主）。
+      superagent?.ensure()
+      const masters = superagent?.ids() ?? new Set()
       const titles = hostData.workspaceTitleBySession()
       const sessions = hostData.sessionSnapshot()
       const now = Date.now()
@@ -361,10 +372,21 @@ export function createDateView({ hostData, viewStore, locale, refreshBell, prepa
           ? updatedAt
           : (typeof createdAt === 'number' && createdAt > 0 ? createdAt : now)
         const running = state?.running === true
-        // 正在运行的会话算作今天：它的更新时间可能很久之前，但用户现在在看它。
-        const bucket = running ? { text: copy.today, rank: 0 } : bucketOf(time, now, copy)
-        if (seat.style.display !== '') seat.style.display = ''
-        visible.push({ seat, row, sessionId, time, running, bucket, workspace })
+        const isMain = masters.has(sessionId)
+        // superagent 自己的会话默认不进消息视图：worker- 是工单执行者，其它 orchestrator-
+        // 是评估跑批，都是它的内部事务；只有主会话要露出来（否则拍平后它连入口都没有）。
+        // 这里不改它们的 display：对面已经写成 none，我们不去改写，免得两边互激。
+        if (superagent !== undefined && superagent !== null && !isMain && superagent.isOwnSessionId(sessionId)) continue
+        // 主会话固定进「优先级」段落并排在最前：它是这个工作区的对话入口，不该按时间沉下去。
+        const bucket = isMain ? { text: copy.today, rank: 0 } : (running ? { text: copy.today, rank: 0 } : bucketOf(time, now, copy))
+        if (isMain) {
+          seat.classList.add(MAIN_SESSION_CLASS)
+          mainSeats.add(seat)
+        } else {
+          if (seat.classList.contains(MAIN_SESSION_CLASS)) seat.classList.remove(MAIN_SESSION_CLASS)
+          if (seat.style.display !== '') seat.style.display = ''
+        }
+        visible.push({ seat, row, sessionId, time, running, isMain, bucket, workspace })
       }
 
       // 2) 上一轮隐藏、这一轮可见的座位要恢复；反过来要隐藏。
@@ -380,6 +402,7 @@ export function createDateView({ hostData, viewStore, locale, refreshBell, prepa
       // 3) 排序：段落先后 → 运行中优先 → 更新时间从新到旧。
       visible.sort((left, right) =>
         left.bucket.rank - right.bucket.rank
+        || Number(right.isMain) - Number(left.isMain)
         || Number(right.running) - Number(left.running)
         || right.time - left.time)
 
@@ -387,7 +410,7 @@ export function createDateView({ hostData, viewStore, locale, refreshBell, prepa
       //    预览文案来自会话投影里的最后一轮，宿主已经同步到客户端，不用额外请求。
       const previewTexts = hostData.previewBySession()
       for (const item of visible) {
-        dressRow(item.row, item.workspace)
+        dressRow(item.row, item.isMain ? copy.mainSession : item.workspace)
         dressPreview(item.row, previewTexts.get(item.sessionId) ?? '')
       }
 
@@ -492,6 +515,8 @@ export function createDateView({ hostData, viewStore, locale, refreshBell, prepa
     headers.clear()
     stripChips()
     stripPreviews()
+    for (const seat of mainSeats) seat.classList.remove(MAIN_SESSION_CLASS)
+    mainSeats.clear()
     for (const seat of hiddenSeats) seat.style.display = ''
     hiddenSeats.clear()
     viewStore.restore(previousGroupBy)

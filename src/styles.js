@@ -137,6 +137,17 @@ const CSS = `
 }
 
 /*
+ * 主会话行（dsh-superagent 的「主会话」）。
+ *
+ * 那个插件把主会话的行内 display 写成 none 藏起来，改在每个工作区组标题上挂 M 气泡当入口；
+ * 消息视图把组标题拍平后入口就没了，所以这里用 !important 把行顶回可见。
+ * 行内保持 none —— 对面据此认为已经藏好，不会反复来藏（改写行内会让两边互激）。
+ */
+[data-codex-sidebar-date-view] [data-row-key^="session:"].codex-sidebar-main-session {
+  display: flex !important;
+}
+
+/*
  * 第二行：这段对话最后说的话。
  * 与标题文字左对齐（图标槽 16px + 间隙 8px），最多两行，超出省略；
  * pointer-events: none 让它不抢走整行的点击与悬停。

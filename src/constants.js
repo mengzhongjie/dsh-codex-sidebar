@@ -33,6 +33,9 @@ export const DATE_MODE_ATTR = 'data-codex-sidebar-date-view'
  */
 export const BELL_ATTR = 'data-codex-sidebar-bell'
 
+/** 主会话行的类名：dsh-superagent 把它的主会话藏起来，我们靠这个类顶回可见。 */
+export const MAIN_SESSION_CLASS = 'codex-sidebar-main-session'
+
 /** 设置在本机的存储键（localStorage）。 */
 export const SETTINGS_KEY = 'dsh-codex-sidebar.settings'
 

@@ -21,6 +21,7 @@ import { createLocale } from './locale.js'
 import { themeDateTrigger, themeHasDateView } from './coexist.js'
 import { createViewStore } from './view-store.js'
 import { createDateView } from './date-view.js'
+import { createSuperagentBridge } from './superagent.js'
 import { createTopbar } from './topbar.js'
 import { mountStyles } from './styles.js'
 import { findSidebar } from './sidebar-dom.js'
@@ -73,9 +74,20 @@ function applyUnsafe(ctx) {
   /** 当前模式：solo / dormant（null 表示还没判定）。 */
   let mode = null
 
-  const dateView = createDateView({
+  /**
+   * superagent 的主会话探测器。
+   *
+   * 它把主会话行藏成 display:none、改在组标题上挂入口；消息视图拍平后入口没了，
+   * 所以要问出主会话 id 并把那几行顶回可见（详见 superagent.js）。
+   * onChange 里排一次重排：id 是异步查到的，查到后列表得跟着变。
+   */
+  let dateView = null
+  const superagent = createSuperagentBridge({ onChange: () => dateView?.schedule() })
+
+  dateView = createDateView({
     hostData,
     viewStore,
+    superagent,
     // 传函数：每次重排都重新问当前语言，切换语言后标题文字立即跟上。
     locale: () => localeState.language(),
     refreshBell: () => topbar?.refreshBell()
@@ -259,6 +271,7 @@ function applyUnsafe(ctx) {
       document.body.removeAttribute(BODY_ATTR)
       document.body.removeAttribute(DATE_MODE_ATTR)
     })
+    quietly('释放 superagent 探测', () => superagent.dispose())
     for (const dispose of disposers) quietly('释放订阅', dispose)
   })
 
