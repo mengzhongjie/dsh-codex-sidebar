@@ -161,6 +161,17 @@ body[data-codex-sidebar] :is(dialog, [role="dialog"]) {
 }
 
 /*
+ * 装了 dsh-claude-style 时它给会话行写了固定高度（实测 28px），优先级高于上面那条规则，
+ * 结果第二行预览溢出到下一行标题上、字叠字。这里用同一属性、三个属性选择器的写法加
+ * !important：只有「宿主 + 主题」同时命中时才有额外权重，solo 环境不受影响。
+ */
+[data-codex-sidebar-date-view] [data-slot="sidebar"] [data-row-key^="session:"] {
+  height: auto !important;
+  min-height: 32px !important;
+  flex-wrap: wrap !important;
+}
+
+/*
  * 第二行：这段对话最后说的话。
  * 与标题文字左对齐（图标槽 16px + 间隙 8px），最多两行，超出省略；
  * pointer-events: none 让它不抢走整行的点击与悬停。

@@ -8,7 +8,8 @@
  *
  * 与 dsh-claude-style 只有两种模式（见 coexist.js）：
  *   solo     页面没有主题：铃铛可用，列表由本插件接管；
- *   dormant  页面有主题：不碰列表与主题的 DOM，铃铛转发给主题。
+ *   dormant  页面有主题**且**它自带日期视图：不碰列表与主题的 DOM，铃铛转发给主题。
+ *            主题在但日期视图被删掉时按 solo 走，列表由本插件接管。
  * 模式在 reconcile() 里判定，设置变化、侧栏挂载、页面变动都会重新跑它。
  *
  * 缩放走 zoom.js：桌面 App 优先用宿主半边的窗口级 page zoom（better-sidebar 的
@@ -18,7 +19,7 @@ import { PLUGIN_ID, LOG_PREFIX, BODY_ATTR, DATE_MODE_ATTR, OWN_ATTR } from './co
 import { readSettings, writeSettings, subscribeSettings } from './settings.js'
 import { createHostData } from './host-data.js'
 import { createLocale } from './locale.js'
-import { themePresent, themeDateTrigger } from './coexist.js'
+import { themeDateTrigger, themeHasDateView } from './coexist.js'
 import { createZoom } from './zoom.js'
 import { createPortalFit } from './portal-fit.js'
 import { createViewStore } from './view-store.js'
@@ -170,7 +171,7 @@ function applyUnsafe(ctx) {
     reconciling = true
     try {
       const settings = readSettings()
-      const next = themePresent() ? 'dormant' : 'solo'
+      const next = themeHasDateView() ? 'dormant' : 'solo'
       setMode(next)
       applyZoomFromSettings()
 
@@ -247,7 +248,7 @@ function applyUnsafe(ctx) {
     // 自愈必须先于 reconcile：reconcile 里 enable() 会写一份新的备份键并把分组切成扁平，
     // 放到它后面就会把「刚刚才扁平好」的分组又还原回工作区（真机踩到：启动时日期视图
     // 标记亮着、列表却还是工作区分组）。这里只处理上一个进程留下的陈旧备份。
-    if (!themePresent()) healLeftoverFlat()
+    if (!themeHasDateView()) healLeftoverFlat()
     reconcile()
     topbar.mount()
     schedule()

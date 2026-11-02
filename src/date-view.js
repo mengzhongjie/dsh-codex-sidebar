@@ -336,13 +336,16 @@ export function createDateView({ hostData, viewStore, locale, refreshBell, prepa
     // 进入前先做准备：装了 dsh-claude-style 时，宿主的分组会被主题的 provider 抢回去，
     // 需要先给它一个「日期视图正开着」的信号（见 entry 里的借用逻辑）。
     prepareEnable?.()
+    // 标记必须先于扁平化落到 body 上：皮肤监听宿主 store，看到扁平会当成残留改回分组，
+    // 它读到的第一个信号决定这一趟是让位还是抢回去。
+    document.body.setAttribute(DATE_MODE_ATTR, '')
     if (!viewStore.flatten()) {
-      // 拿不到 store：把准备阶段留下的痕迹退掉。
+      // 拿不到 store：把准备阶段与标记一起退掉。
+      document.body.removeAttribute(DATE_MODE_ATTR)
       afterDisable?.()
       return
     }
     active = true
-    document.body.setAttribute(DATE_MODE_ATTR, '')
     // 宿主切分组是异步渲染的，等两帧再排。
     window.requestAnimationFrame(() => window.requestAnimationFrame(() => schedule()))
     refreshBell?.()

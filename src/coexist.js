@@ -23,6 +23,19 @@ export function themeDateTrigger() {
   return document.querySelector('.dsh-claude-active-shelf-actions button[class*="active-shelf-trigger"]')
 }
 
+/**
+ * 主题在，但它的日期视图已经不在了（0.19.7 起把「日期布局」特性整个删掉）。
+ *
+ * 这种情况不能进让位模式：让位的前提是主题接手了列表的日期排列，它不接手就会变成谁都
+ * 不排，铃铛点下去也没有对象。此时按「无主题」处理，列表交给本插件自己的消息视图。
+ * 判据是主题自己的两处痕迹：顶行那颗铃铛，或 body 上的日期分组标记。
+ */
+export function themeHasDateView() {
+  if (!themePresent()) return false
+  if (themeDateTrigger() !== null) return true
+  return document.body.hasAttribute('data-dsh-claude-date-groups')
+}
+
 /** 扫描页面上的主题痕迹：装了就返回 true。 */
 export function themePresent() {
   // body 属性：主题把每个偏好都镜像成一个 data-dsh-claude-* 属性。
