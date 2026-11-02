@@ -33,8 +33,7 @@
     "lib",
     "cordis.patch.yml",
     "assets",
-    "README.md",
-    "LICENSE"
+    "README.md"
   ],
   "keywords": [
     "dsh",

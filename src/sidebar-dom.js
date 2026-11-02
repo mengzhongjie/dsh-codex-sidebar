@@ -20,7 +20,7 @@ export function findSidebar() {
  * 坑：[data-slot="sidebar"] 只是个 0×0 的挂点，量它的 getBoundingClientRect 永远是 0；
  * 真正的侧栏面板是它的第一个元素孩子（桌面 App 与 web 都是这样）。
  */
-export function findSidebarBox(sidebar) {
+function findSidebarBox(sidebar) {
   const root = sidebar ?? findSidebar()
   if (root === null) return null
   const box = root.firstElementChild
@@ -35,7 +35,7 @@ export function sidebarWidth(sidebar) {
 }
 
 /** 取侧栏折叠/展开按钮：aria-label 中英文都认。 */
-export function findToggle(sidebar) {
+function findToggle(sidebar) {
   const root = sidebar ?? findSidebar()
   if (root === null) return null
   const wanted = TOGGLE_LABELS.map(label => label.toLowerCase())
@@ -163,7 +163,7 @@ export function sessionIdOfRow(row) {
 }
 
 /** 工作区标题行数量：用来判断宿主是否已经切到扁平（扁平下为 0）。 */
-export function countWorkspaceRows(sidebar) {
+function countWorkspaceRows(sidebar) {
   const root = sidebar ?? findSidebar()
   return root === null ? 0 : root.querySelectorAll(WORKSPACE_ROW_SELECTOR).length
 }

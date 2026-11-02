@@ -53,7 +53,7 @@ export const DEFAULT_SETTINGS = {
 }
 
 /** 缩放的五个快捷档位（百分比），与设置页按钮一致。 */
-export const ZOOM_STEPS = [0.8, 1, 1.25, 1.5]
+const ZOOM_STEPS = [0.8, 1, 1.25, 1.5]
 
 /** 缩放的合法区间：太大或太小都会让侧栏错位。 */
 export const ZOOM_RANGE = { min: 0.6, max: 2 }

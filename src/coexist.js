@@ -37,7 +37,7 @@ export function themeHasDateView() {
 }
 
 /** 扫描页面上的主题痕迹：装了就返回 true。 */
-export function themePresent() {
+function themePresent() {
   // body 属性：主题把每个偏好都镜像成一个 data-dsh-claude-* 属性。
   for (const attribute of [...document.body.attributes]) {
     if (THEME_MARKERS.some(marker => attribute.name.startsWith(marker))) return true

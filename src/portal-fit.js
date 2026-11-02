@@ -21,7 +21,7 @@
  */
 
 /** 浮层根节点的标记属性（便于在 devtools 里认出来，也便于排查）。 */
-export const PORTAL_FIT_ATTR = 'data-codex-sidebar-portal-fit'
+const PORTAL_FIT_ATTR = 'data-codex-sidebar-portal-fit'
 
 /** 会被除以倍率的行内偏移属性。 */
 const OFFSET_PROPS = ['left', 'top', 'right', 'bottom']

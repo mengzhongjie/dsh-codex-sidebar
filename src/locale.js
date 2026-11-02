@@ -90,7 +90,7 @@ function localeFromService(service) {
 }
 
 /** 宿主 locale 服务报的原始语言串（诊断日志用；读不到就是空串）。 */
-export function hostLocaleText(ctx) {
+function hostLocaleText(ctx) {
   try {
     return localeFromService(ctx?.get?.('locale'))
   } catch {
@@ -99,7 +99,7 @@ export function hostLocaleText(ctx) {
 }
 
 /** 判定界面语言，返回 'zh' 或 'en'。 */
-export function resolveLocale(ctx) {
+function resolveLocale(ctx) {
   const fromHost = hostLocaleText(ctx)
   if (fromHost !== '') return languageOf(fromHost)
   const fromDocument = document.documentElement.lang
