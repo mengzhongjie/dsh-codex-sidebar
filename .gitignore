@@ -1,17 +1,16 @@
 node_modules/
 .npm-cache/
 .playwright-browsers/
-.debug/*.log
-.debug/cookies.txt
+
+# 本地调试目录：探针脚本、日志、截图、抓包产物全在本地，不入库
+# （里面还有一次性 token，见 .debug/*.txt 的历史说明）
+.debug/
+
+shots/
+.prwork/
+
+# 隔离的浏览器测试 home（.debug/setup-web-profiles.mjs 建）
+.testhome/
+
 .dsh-project-memory/
 .DS_Store
-.debug/*.png
-.debug/out-*
-.debug/*.json
-
-# 本地调试产物（含一次性 token，绝不入库）
-.debug/*.txt
-.debug/*.log
-shots/
-
-.prwork/
