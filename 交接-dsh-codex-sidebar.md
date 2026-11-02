@@ -148,3 +148,42 @@
 - 改动：删 `src/settings-section.js`、`src/open-settings.js`；`src/entry.js` 去掉 `createSettingsSection` import、`registerSettingsSection()` 与其调用，`inject` 改为 `[]`（`package.json` 的 `dsh.client.inject` 同步）；`src/date-view.js` 的 `arrange()` 去掉 `readSettings()/skipWorkspaces` 过滤，未分组会话用 `copy.ungrouped` 作标签，只跳过认不出 id 的座位；`src/locale.js` 增加 `ungrouped`（未分组 / Ungrouped）。
 - 实测（codexprobe，1440×900）：消息视图内 `totalRows=43、visibleRows=43`（改前可见 21），段落仍为 `[优先级, 昨天, 星期六, 星期五, 星期二, 更早]`，预览 42 条，行内标签覆盖全部工作区；bundle 里 `settings.section` 与「侧栏设置」命中 0。
 - 遗留：`src/locale.js` 里还留着设置页时期的死文案键（settingsIntro / skipHint / zoom* 等），下次清理；`src/styles.js` 里同类死样式也还没删。
+
+> **状态：已回滚。** 下面两节记录的改动在 2026-11-02 17:58 随崩溃回滚中止（`git checkout 5788b88 -- src lib`），
+> 代码里已经没有它们；这里保留作记录，现行行为见「崩溃与回滚」之后的补记。
+
+## 2026-11-02 又一轮：把主题的日期布局整个删掉（本插件改为独占侧栏）
+
+- 方向（用户 18:0x 三条回答）：不再和主题抢同一个铃铛 —— 直接把 claude-style 的「日期布局」特性删掉，没有插件就不该有那颗小铃铛。
+- 已做：主题仓库 `/Users/apple/Desktop/SuperCode/dsh-claude-style` 删 `features/date-groups/` 全目录、`features/settings/settings-tab-date-layout.ts`、`active-shelf` 里的铃铛、`prefs.ts` 的两个偏好项、`workspace-view.ts` 与 `active-first.ts` 里两处 `data-dsh-claude-date-groups` 守卫；`npm run build` 与 `npm run lint` 通过。
+- 验证环境：两个与生产隔离的 web profile（`.testhome/profiles/webclean` 无主题 / `webtheme` 带主题，端口 49830 / 49840），`DSH_HOME=$PWD/.testhome` 起服务，探针 `.debug/probe-two-envs.mjs`。
+- 结果：webtheme 里主题铃铛计数从 1 变 0，放大镜还在；我们的 `data-codex-sidebar-bell` 两边都在，5 个会话行 / 9 个工作区行正常。
+
+## 2026-11-02 铃铛永远切本插件视图 + 借主题标记（本轮）
+
+- 用户：「这里的闹钟键在停用之后就应该消失，然后我们按这里的闹钟键之后收起了工作区，而不是进入我们的消息会话」。
+- 根因（实测）：装 dsh-claude-style 时旧代码把铃铛点击委派给主题铃铛（dormant 模式），点下去开的是主题的日期视图 → 工作区行消失、body 只有 data-dsh-claude-date-groups、ourHeaders=0。
+- 改动：`src/topbar.js` 删掉委派分支，点击固定 `dateView.toggle()`，并拦截 pointerdown/mousedown/pointerup/mouseup（铃铛长在宿主工作区行里，不拦会折叠整组）；`src/entry.js` 删掉 mode/dormant/setMode 与 onBellClick/bellPressed 传参，新增 `closeThemeDateView()`、`borrowThemeMarker()` / `returnThemeMarker()`（借 `data-dsh-claude-date-groups`，作为 prepareEnable/afterDisable 传给 createDateView，卸载兜底归还）；`src/constants.js` 增 `THEME_DATE_MODE_ATTR`。
+- 借标记的原因：主题 `packages/client/src/features/workspace/workspace-view.ts:195` 与 `:205-208` 会盯着视图 store，发现 groupBy==='flat' 且 body 无该标记就把分组改回 activeGroupBy —— 不借标记，我们的扁平列表会被主题撤销（实测 flatList=0、只剩 1 个标题）。
+- 实测（Playwright headless 1440×900）：codextheme 点铃铛 → dateView=true、themeDate=true（借来的）、ourHeaders=6、themeHeaders=0、workspaceGroups 9→0、sessionVisible 3→43、flatList=1、主题铃铛 display:none；再点一次全还原（workspaceGroups=9、themeDate=false）。codexprobe → 标题 [优先级,昨天,星期六,星期五,星期二,更早]、可见 43 行、预览 42、标签 43、bellPressed='true'。
+- 文档：README 已按当前行为重写（无设置页 / 无齿轮 / 无缩放 / 无屏蔽工作区）。
+- 未决：用户说的「闹钟键在停用之后就应该消失」具体指哪一种（关视图后铃铛消失 / 主题旧铃铛消失 / 停用插件后立即消失）还需确认。
+
+## 2026-11-02 装了主题时会话行文字叠字（本轮）
+
+- 现象（用户截图）：消息视图里两行式会话行的预览溢出到下一行标题上，字叠字。
+- 根因（实测）：装 dsh-claude-style 后主题给会话行写了固定高度（row 与座位 span 都是 28px），优先级高于我们的 `[data-codex-sidebar-date-view] [data-row-key^="session:"]` 规则；预览在 flex 换行里照常排版，但行高不跟着长 → 预览 bottom 285+17=302 越过座位 bottom 295，压在下一行标题上。无主题环境行高 38~56px，问题不出现。
+- 修复：`src/styles.js` 两条规则都加 `!important`，并补一条三属性选择器 `[data-codex-sidebar-date-view] [data-slot="sidebar"] [data-row-key^="session:"]`（同一组 height/min-height/flex-wrap），只在宿主+主题同时命中时提高权重，solo 环境行为不变。
+- 实测（Playwright headless，1440×900，43 行）：codextheme previewOverflow=0、seatOverlaps=0（修前预览越过座位底边）、段落仍 6 段；codexprobe 同样 0/0。截图 `.debug/shot-theme-overlap.png`、`.debug/shot-solo-overlap.png`。
+- 探针：`.debug/probe-overlap.mjs`（行列几何）、`.debug/probe-rules.mjs`（规则扫描）、`.debug/probe-height.mjs`（行内 height auto 验证）、`.debug/probe-overlap2.mjs`（相邻座位/预览越界计数）。
+
+## 2026-11-02 崩溃与回滚（重要）
+
+- 现象：17:53-17:54 桌面 App 崩溃重启两次。
+- 崩溃日志（~/Library/Logs/DeepSeek Harness）：
+  - crash-2026-11-02T09-53-48-937Z-main.log：`DesktopHostFatalError: cannot create effect on inactive context`，栈在 `app.asar/lib/main.js:3831` → `dsh-desktop-host/lib/index.js:83` → cordis `Fiber._reload`。
+  - crash-2026-11-02T09-54-06-995Z / 09-54-19-349Z -web-boot.log：`Error: web boot: 19 entries did not activate`，全部卡在等待 `uiWorkspace` / `uiConversation`。
+- 时间线：这几条日志正好落在我连续重建 `lib/client.js`（17:37 / 17:44 / 17:52 / 17:55）之后，且 App 主进程当时正开着并 link 指向本仓库 —— 高度怀疑是「插件 bundle 在运行中被替换」触发宿主热重载（cordis reload）时上下文已失效，属于宿主 reload 路径的报错，不是我们代码里显式抛的异常。
+- 处置：`git checkout 5788b88 -- src lib` 回滚到 5788b88（最后一次在真实 App 里稳定跑了半小时的版本，`lib/client.js` 67655 B），未完成的改动全部 `git stash`（stash@{0}「wip: 预览 markdown 清理 + 悬停图标收敛 + 撤销 marquee（崩溃后暂存）」）。
+- 回滚后验证（desktopmirror 49820，含主题链路）：控制台只有 `[codex-sidebar] applied (en)`，无 pageerror；点铃铛 → 6 段标题（Priority/Yesterday/…）、可见 43 行、工作区行 0、主题日期标题 0。
+- 教训：App 运行时不要重建 `lib/client.js`；要改就先改源码，等用户 Cmd+Q 之后再构建，或临时从 desktop 的 bundles 里摘掉本插件。
