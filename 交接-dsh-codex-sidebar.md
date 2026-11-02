@@ -158,3 +158,11 @@
 - 实测（Playwright headless 1440×900）：codextheme 点铃铛 → dateView=true、themeDate=true（借来的）、ourHeaders=6、themeHeaders=0、workspaceGroups 9→0、sessionVisible 3→43、flatList=1、主题铃铛 display:none；再点一次全还原（workspaceGroups=9、themeDate=false）。codexprobe → 标题 [优先级,昨天,星期六,星期五,星期二,更早]、可见 43 行、预览 42、标签 43、bellPressed='true'。
 - 文档：README 已按当前行为重写（无设置页 / 无齿轮 / 无缩放 / 无屏蔽工作区）。
 - 未决：用户说的「闹钟键在停用之后就应该消失」具体指哪一种（关视图后铃铛消失 / 主题旧铃铛消失 / 停用插件后立即消失）还需确认。
+
+## 2026-11-02 装了主题时会话行文字叠字（本轮）
+
+- 现象（用户截图）：消息视图里两行式会话行的预览溢出到下一行标题上，字叠字。
+- 根因（实测）：装 dsh-claude-style 后主题给会话行写了固定高度（row 与座位 span 都是 28px），优先级高于我们的 `[data-codex-sidebar-date-view] [data-row-key^="session:"]` 规则；预览在 flex 换行里照常排版，但行高不跟着长 → 预览 bottom 285+17=302 越过座位 bottom 295，压在下一行标题上。无主题环境行高 38~56px，问题不出现。
+- 修复：`src/styles.js` 两条规则都加 `!important`，并补一条三属性选择器 `[data-codex-sidebar-date-view] [data-slot="sidebar"] [data-row-key^="session:"]`（同一组 height/min-height/flex-wrap），只在宿主+主题同时命中时提高权重，solo 环境行为不变。
+- 实测（Playwright headless，1440×900，43 行）：codextheme previewOverflow=0、seatOverlaps=0（修前预览越过座位底边）、段落仍 6 段；codexprobe 同样 0/0。截图 `.debug/shot-theme-overlap.png`、`.debug/shot-solo-overlap.png`。
+- 探针：`.debug/probe-overlap.mjs`（行列几何）、`.debug/probe-rules.mjs`（规则扫描）、`.debug/probe-height.mjs`（行内 height auto 验证）、`.debug/probe-overlap2.mjs`（相邻座位/预览越界计数）。
