@@ -1,0 +1,8 @@
+node_modules/
+.npm-cache/
+.playwright-browsers/
+.debug/*.log
+.debug/cookies.txt
+.dsh-project-memory/
+.DS_Store
+.debug/*.png

@@ -1,0 +1,4 @@
+# dsh-codex-sidebar 的 bundle patch：只把自己这一行插进 Loader 树，不改动任何已有条目。
+- insert:
+    - id: ui-codex-sidebar
+      name: 'dsh-codex-sidebar'
