@@ -148,3 +148,13 @@
 - 改动：删 `src/settings-section.js`、`src/open-settings.js`；`src/entry.js` 去掉 `createSettingsSection` import、`registerSettingsSection()` 与其调用，`inject` 改为 `[]`（`package.json` 的 `dsh.client.inject` 同步）；`src/date-view.js` 的 `arrange()` 去掉 `readSettings()/skipWorkspaces` 过滤，未分组会话用 `copy.ungrouped` 作标签，只跳过认不出 id 的座位；`src/locale.js` 增加 `ungrouped`（未分组 / Ungrouped）。
 - 实测（codexprobe，1440×900）：消息视图内 `totalRows=43、visibleRows=43`（改前可见 21），段落仍为 `[优先级, 昨天, 星期六, 星期五, 星期二, 更早]`，预览 42 条，行内标签覆盖全部工作区；bundle 里 `settings.section` 与「侧栏设置」命中 0。
 - 遗留：`src/locale.js` 里还留着设置页时期的死文案键（settingsIntro / skipHint / zoom* 等），下次清理；`src/styles.js` 里同类死样式也还没删。
+
+## 2026-11-02 铃铛永远切本插件视图 + 借主题标记（本轮）
+
+- 用户：「这里的闹钟键在停用之后就应该消失，然后我们按这里的闹钟键之后收起了工作区，而不是进入我们的消息会话」。
+- 根因（实测）：装 dsh-claude-style 时旧代码把铃铛点击委派给主题铃铛（dormant 模式），点下去开的是主题的日期视图 → 工作区行消失、body 只有 data-dsh-claude-date-groups、ourHeaders=0。
+- 改动：`src/topbar.js` 删掉委派分支，点击固定 `dateView.toggle()`，并拦截 pointerdown/mousedown/pointerup/mouseup（铃铛长在宿主工作区行里，不拦会折叠整组）；`src/entry.js` 删掉 mode/dormant/setMode 与 onBellClick/bellPressed 传参，新增 `closeThemeDateView()`、`borrowThemeMarker()` / `returnThemeMarker()`（借 `data-dsh-claude-date-groups`，作为 prepareEnable/afterDisable 传给 createDateView，卸载兜底归还）；`src/constants.js` 增 `THEME_DATE_MODE_ATTR`。
+- 借标记的原因：主题 `packages/client/src/features/workspace/workspace-view.ts:195` 与 `:205-208` 会盯着视图 store，发现 groupBy==='flat' 且 body 无该标记就把分组改回 activeGroupBy —— 不借标记，我们的扁平列表会被主题撤销（实测 flatList=0、只剩 1 个标题）。
+- 实测（Playwright headless 1440×900）：codextheme 点铃铛 → dateView=true、themeDate=true（借来的）、ourHeaders=6、themeHeaders=0、workspaceGroups 9→0、sessionVisible 3→43、flatList=1、主题铃铛 display:none；再点一次全还原（workspaceGroups=9、themeDate=false）。codexprobe → 标题 [优先级,昨天,星期六,星期五,星期二,更早]、可见 43 行、预览 42、标签 43、bellPressed='true'。
+- 文档：README 已按当前行为重写（无设置页 / 无齿轮 / 无缩放 / 无屏蔽工作区）。
+- 未决：用户说的「闹钟键在停用之后就应该消失」具体指哪一种（关视图后铃铛消失 / 主题旧铃铛消失 / 停用插件后立即消失）还需确认。

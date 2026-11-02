@@ -86,3 +86,13 @@ export const TOGGLE_LABELS = ['collapse sidebar', 'expand sidebar', '收起侧�
 
 /** 本插件自建节点统一带的属性，用来自我识别（观察者据此跳过自己的写入）。 */
 export const OWN_ATTR = 'data-codex-sidebar-owned'
+
+/**
+ * dsh-claude-style 自己的「日期视图正开着」标记。
+ *
+ * 主题的 workspace-view 会盯着宿主的视图 store：一旦发现分组被改成 flat、而这个标记
+ * 不在 body 上，就当成「外部误改」立刻改回工作区分组 —— 我们要的扁平列表会被它撤销。
+ * 主题自己的日期视图开着时同样靠这个标记让 reconcile 提前返回，所以进入我们的消息视图
+ * 期间临时借它用一下（退出时归还，见 entry.js 的借用逻辑）。
+ */
+export const THEME_DATE_MODE_ATTR = 'data-dsh-claude-date-groups'
