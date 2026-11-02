@@ -1,6 +1,6 @@
 # 交接：dsh-codex-sidebar
 
-> 最近更新：2026-11-02（缩放：窗口级 page zoom 证实不可用，改页面 CSS + body 浮层补偿；铃铛在有主题时也能用）。
+> 最近更新：2026-11-02（深入可用性与稳定性复核定稿，版本 0.2.0；高频切换、长短标题滑动、退出还原全绿）。
 
 ## 目标与验收标准
 
@@ -289,4 +289,34 @@
 
 坑：删 `styles.js` 的缩放控件样式时，一起删掉了 CSS 模板的收尾反引号与分号，
 esbuild 报 `src/styles.js:416:1: ERROR: Unterminated string literal`；补回后产物 76.3 KiB → 60.9 KiB。
+
+## 2026-11-02 深入可用性与稳定性复核（本轮定稿）
+
+### 1. 接手会话与上下文回溯
+- 定位到历史会话 `~/.dsh/sessions/--Users-apple-Desktop-SuperCode-Project-dsh-codex-messagesidebar--/session-5c2ceba5-6c28-4aaa-bd22-0fe9154b5f26`。
+- 上下文梳理：Turn 10 逐条核实 10 项可用性修复并收敛 `isOurMutation` 观察者判定（`b21b52d`）；Turn 11 进行全仓体检，清理包清单 LICENSE 与 8 处无用符号导出（`b8c93cf`）；Turn 12 彻底清理缩放代码并升级版本至 0.2.0（`ea153e3`）。
+
+### 2. 深入可用性与边界测试实测证据
+编写复合动作探针脚本 `.debug/probe-deep-usability.mjs`，在当前运行的两个隔离 web profile 环境（`webclean:49830` 原生皮肤、`webtheme:49840` claude-style 主题皮肤）中进行了 Playwright headless 真机实测：
+
+1. **高频连续切换测试（状态机自激与死锁防护）**：
+   - 模拟用户在 80ms 间隔下连续 5 轮（10 次）快速点按铃铛进出消息视图。
+   - 结果：两端均未发生微任务自激死锁，视图最终稳定展开；原生环境座位保持 47 个、主题环境保持 46 个；段落标题均为 6 个（`Priority / Yesterday / Saturday / Friday / Tuesday / Earlier`）；未产生任何孤儿 Header（`orphanHeaders: 0`）。
+2. **长标题悬停与短标题滑动边缘测试**：
+   - 长标题（45字符）：两帧延迟后正常启动平移，位移量分别为 `-89.5px`（webclean）与 `-76.19px`（webtheme），平滑缓动；鼠标触发 `mouseout` 后，`.codex-sidebar-marquee-track` 轨道节点被立即彻底拆解还原，文字回归主标题节点，无残留类名与内联变换。
+   - 短标题（窗口可完整容纳）：计算得出 `distance <= 4`，判定无需滑动，不建立多余的 DOM 轨道包装。
+3. **退出消息视图彻底还原验证**：
+   - 铃铛切换关闭消息视图后，全量节点回读核实：`leftHeaders = 0`、`leftPreviews = 0`、`leftChips = 0`、`leftTracks = 0`、`leftMarqueeClasses = 0`，`data-codex-sidebar-date-view` 属性彻底移除，宿主原生侧栏 100% 还原。
+
+### 3. 代码审查发现的遗留清理项（待办建议）
+代码目前逻辑健全、运行健康，但伴随此前设置页与工作区屏蔽逻辑下线，存在以下已无调用者的死代码可随时清理：
+1. `src/styles.js`：第 233~408 行仍留存约 175 行旧设置页样式（`.codex-sidebar-settings*`、`.codex-sidebar-switch*` 等）。
+2. `src/locale.js`：中英用词表中残留 9 个未被引用的死键（`settingsTitle`、`skipSection`、`skipHint`、`settingsIntro`、`dateViewHint`、`themeNoticeDesc`、`emptyWorkspaces`、`untitled`、`skipped`）。
+3. `src/constants.js` 与 `src/settings.js`：`skipWorkspaces` 默认配置和归一化逻辑已无调用（消息视图已对全部工作区和未分组开放）。
+4. `src/host-data.js`：`previewBySession()` 上方存在连续两段重复的 JSDoc 注释。
+
+### 4. 交付状态与桌面 App 说明
+- 本地 `lib/client.js` 构建产物为 60.9 KiB，版本号 0.2.0。
+- `~/.dsh/profiles/desktop` 的软链接与补丁均已指向最新版本。
+- 桌面 App 关窗不退进程，用户在需要时使用 **Cmd+Q** 彻底退出并重启 App 即可加载最新 0.2.0 bundle。
 
