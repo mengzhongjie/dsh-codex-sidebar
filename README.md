@@ -3,8 +3,8 @@
 DSH（DeepSeek Harness）左侧栏的「消息视图」插件：把侧栏里的全部会话按 **优先级 / 昨天 / 星期X / 更早**
 重新分段排列，工作区行收起来，顶行留下一颗铃铛负责切换。
 
-拿到的是一个**独立插件**，不依赖任何主题或皮肤插件。装了 dsh-claude-style 时它会自动让位：
-不碰列表，铃铛转给主题自己的日期视图（见「与 dsh-claude-style 的共存」）。
+拿到的是一个**独立插件**，不依赖任何主题或皮肤插件。本机的 dsh-claude-style 已经去掉日期分组与顶行铃铛
+（见「与 dsh-claude-style 的共存」），所以装了主题也由本插件独占列表。
 
 ![消息视图](docs/screenshot-date-view.png)
 
@@ -39,14 +39,15 @@ DSH（DeepSeek Harness）左侧栏的「消息视图」插件：把侧栏里的�
 
 ## 与 dsh-claude-style 的共存
 
-dsh-claude-style 主题里也内置了一份「铃铛 + 日期分组」。两者可以同时装，规则是：
+dsh-claude-style 原本也内置一份「铃铛 + 日期分组」。本机主题仓库（`/Users/apple/Desktop/SuperCode/dsh-claude-style`）
+已把日期分组特性与顶行铃铛整份删掉，只保留自定义缩放，规则因此变成：
 
 | 事项 | 行为 |
 | --- | --- |
-| 列表 | 有主题时本插件不碰列表：主题在自己的日期视图里搬座位，两边同时插手会把分组改回去 |
-| 铃铛 | 始终显示；有主题时点它转给主题自己的日期视图，没有主题时切本插件的消息视图（src/entry.js 的 onBellClick） |
-| 按下态 | 有主题时读主题铃铛自己的 aria-pressed，没有主题时读本插件的状态（bellPressed） |
-| 主题检测 | 只看公开痕迹：body 上有 data-dsh-claude* 属性，或页面上有 dsh-claude- 前缀的类名（src/coexist.js） |
+| 列表 | 由本插件独占：主题看到 `body[data-codex-sidebar-date-view]` 就不再把它改回工作区分组（workspace-view 的 reconcile 与 healGrouping、active-first 的 reorder 三处都让位） |
+| 铃铛 | 只有本插件这一颗；主题的旧铃铛已不存在 |
+| 按下态 | 读本插件自己的状态（bellPressed） |
+| 让位条件 | 只有主题**仍然自带日期视图**时才 dormant：`.` + `` `body` 上有 `data-dsh-claude-date-groups` 或页面上还找得到主题铃铛（`src/coexist.js` 的 `themeHasDateView()`）。主题删掉日期视图后本插件照常接管 |
 
 ## 持久化
 
@@ -74,7 +75,7 @@ dsh-claude-style 主题里也内置了一份「铃铛 + 日期分组」。两者
 | src/host-data.js | 读宿主 sessions / workspaces 服务快照（运行中、更新时间、标题、工作区名） |
 | src/settings.js | localStorage 读写与订阅 |
 | src/locale.js | 中英文案与语言解析（订阅宿主 locale 服务） |
-| src/coexist.js | 主题检测、主题日期铃铛定位 |
+| src/coexist.js | 主题检测、主题日期铃铛定位、`themeHasDateView()`（主题是否仍自带日期视图） |
 | src/styles.js | 注入的全部样式（全部走宿主 token，浅色/深色自适应） |
 | src/constants.js | 常量：属性名、类名、存储键、默认设置 |
 
@@ -96,9 +97,15 @@ probe-two-envs.mjs（两个隔离 profile 对照：无主题 / 带主题）、pr
 - 结果依赖宿主私有 DOM 契约（data-row-key、座位 span、flatList 容器），宿主大改版可能失效；
   选择器集中在 src/constants.js 与 src/sidebar-dom.js，方便一处改完。
 - 桌面 App 没有窗口级缩放的对外通道，页面缩放只能走 CSS；本插件已不提供缩放（那是主题的能力）。
-- 装了主题时本插件让位：列表由主题的日期视图负责，此时按我们的铃铛等于按主题的铃铛。
+- 若把主题还原成带日期视图的版本，本插件会重新让位：那时列表由主题的日期视图负责。
 
 ## 更新记录
+
+- **2026-11-02 19:00 主题让位、本插件接管**：本机主题仓库删掉日期分组特性、设置页「日期布局」与顶行铃铛；
+  主题侧补三处让位守卫（reconcile / healGrouping / active-first reorder），本插件把 `data-codex-sidebar-date-view`
+  标记提到扁平化之前写，避免主题把扁平分组改回去。桌面 profile 换上本地构建的主题、装上本插件后，
+  无主题与带主题两个隔离环境都量到 6 段标题 / 46 行 / 0 重叠，桌面镜像（desktopprobe）同样是 46 个座位。
+- **2026-11-02 插件图标**：`package.json` 加 `"icon": "./assets/icon.svg"`，图标是渐变圆角方块上的三条消息条 + 右上角铃铛。
 
 - **2026-11-02 消息视图改造**：取消设置页与齿轮、取消缩放与「屏蔽工作区」；消息视图对全部工作区与未分组会话开放；
   会话行改两行式（标题 + 最新消息预览）；首段改名「优先级」。

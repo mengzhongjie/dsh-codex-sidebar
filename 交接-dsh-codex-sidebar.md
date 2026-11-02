@@ -187,3 +187,45 @@
 - 处置：`git checkout 5788b88 -- src lib` 回滚到 5788b88（最后一次在真实 App 里稳定跑了半小时的版本，`lib/client.js` 67655 B），未完成的改动全部 `git stash`（stash@{0}「wip: 预览 markdown 清理 + 悬停图标收敛 + 撤销 marquee（崩溃后暂存）」）。
 - 回滚后验证（desktopmirror 49820，含主题链路）：控制台只有 `[codex-sidebar] applied (en)`，无 pageerror；点铃铛 → 6 段标题（Priority/Yesterday/…）、可见 43 行、工作区行 0、主题日期标题 0。
 - 教训：App 运行时不要重建 `lib/client.js`；要改就先改源码，等用户 Cmd+Q 之后再构建，或临时从 desktop 的 bundles 里摘掉本插件。
+
+## 2026-11-02 19:00 主题删掉日期布局，本插件独占侧栏（本轮）
+
+用户指令：主题的日期布局删掉；主题里不要那颗铃铛；我们的插件测试放到 web profile 与生产隔离；本地用我们自己的插件；给插件配一个图标。
+
+改了什么（主题仓库 `/Users/apple/Desktop/SuperCode/dsh-claude-style`，HEAD 原 `8e2f76a`）：
+- 删 `packages/client/src/features/date-groups/`（5 个文件）与 `features/settings/settings-tab-date-layout.ts`；
+  `settings.ts` 去掉 import 与注册，`settings.copy.json` 删四组文案，`contracts/src/prefs.ts` 删 `dateGroups`/`dateSkipWorkspaces`，
+  `core/feature.ts` 的 `SettingsTabId` 去掉 `'date-layout'`，`core/scheduler.ts` 去掉 `dateGroups` 句柄，
+  `workspace/workspace-view.ts` 与 `active-first/active-first.ts` 删掉原来的 `data-dsh-claude-date-groups` 守卫。
+- `features/active-shelf/` 重写：只留放大镜，铃铛（`-trigger`、`-count`、`RUNNING_ATTRIBUTE`、订阅）全部移除，manifest 的 contracts 与 `ungated` 文案同步。
+- 新加三处让位守卫：`workspace-view.ts` 的 `reconcile()` 与 `healGrouping()`、`active-first.ts` 的 `reorder()`，
+  条件是 `document.body.hasAttribute('data-codex-sidebar-date-view')`——外部插件声明接管时，主题不再把扁平分组改回工作区、也不再重排行。
+- `npm run build` 通过（`built lib/client.js (1012866 bytes)`），`npm run lint` 通过；`npm test` 跑不了（本机无 Chrome，vitest 报 `no Chrome or Edge found`，改造前就这样）。
+
+改了什么（本仓库）：
+- `src/coexist.js` 新增 `themeHasDateView()`，`src/entry.js` 用它判定 solo/dormant：主题在但日期视图被删掉时走 solo。
+- `src/date-view.js` 把 `data-codex-sidebar-date-view` 标记提到 `viewStore.flatten()` **之前**写，失败时一并撤掉；
+  顺序反了会被主题的 reconcile 看到扁平就改回工作区分组（实测只剩 5 行，改后 46 行）。
+- `src/styles.js` 补回 `c248966` 的会话行高度修正（`height: auto !important` + 三属性选择器）。
+- `src/topbar.js` 注释去掉「铃铛 + 齿轮」的过时说法。
+- `package.json`：`description` 改成消息视图语义、`icon` 指向 `assets/icon.svg`、`files` 带上 `assets`。
+- 新增 `assets/icon.svg`（36×36，渐变圆角方块 + 三条消息条 + 右上角铃铛，铃铛用背景色描一圈分离线以免小尺寸糊在一起）。
+
+装到桌面（本机生产 App）：
+- `~/.dsh/profiles/desktop/node_modules/dsh-claude-style/lib` 用本地构建产物替换，旧目录备份在 `lib.backup-20261102-184901`；
+  回滚命令：`rm -rf <lib> && mv <lib.backup-20261102-184901> <lib>`。
+- `node scripts/install.mjs --profile desktop` 装本插件（bundles / patch / link 三处都已写）。
+- App 用 SIGTERM 退出后重开（`osascript quit` 对它不生效），新进程监听 49564。
+
+验证证据：
+- webclean（无主题）与 webtheme（主题在、日期视图已删）：都进入本插件视图，6 段标题
+  `Priority / Yesterday / Saturday / Friday / Tuesday / Earlier`、46 行、44 个预览、46 个 chip、座位重叠 0。
+- 桌面同 profile 的镜像（desktopprobe，复制 desktop 的 package.json 与 node_modules 软链）：本插件已注入
+  （`data-codex-sidebar` + `data-codex-sidebar-bell`），铃铛挂在 `sidebar.workspaces` 行（aria-label `Message view`），
+  点下去 46 个座位，主题铃铛计数 0。
+- 未验证：桌面 App 窗口内的实际观感与点击（App 需要令牌，外部探针 401；只能由用户在窗口里点一次确认）。
+
+坑：
+- `osascript -e 'quit app "DeepSeek Harness"'` 对桌面 App 无效，仍要用 `pkill -TERM -f "DeepSeek Harness.app/Contents/MacOS/DeepSeek Harness"`。
+- 守卫脚本原来用 `pgrep -f` 判断 App 是否在跑，实测匹配不到，会在运行中替换主题 lib；改成 `ps -Ao comm= | grep -qxF` 才可靠。
+- 主题的 `.debug/` 与 `shots/` 在这两个仓库里都是忽略目录，探针与截图不要提交。
