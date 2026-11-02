@@ -197,3 +197,10 @@ node .debug/verify2.mjs "$URL" .debug/prep-zoom.js .debug/measure-portal-fit.js 
 4. **移除缩放与齿轮**：缩放不再是侧栏职责（设置页卡片、齿轮按钮、`zoom.start()` 全部删除，`zoom.reset()` + `portalFit.apply(1)` 仅用于清理历史残留）；顶行只留一颗铃铛。
 
 实测（`dsh --profile codexprobe`，1440×900，无主题）：顶行动作区只有 `消息视图` 一个按钮；打开后段落标题 `[优先级, 昨天, 星期六, 星期五, 星期二, 更早]`、可见行 21、带预览 20、首行高 68px、预览与标题文字左对齐（x=40）、预览两行；悬停时 `marquee=1`、工作区标签 `display:none`、预览保留；再点铃铛后段落标题 0、预览 0、工作区行回到 9。
+
+## 2026-11-02 消息视图开放给全部会话
+
+- **取消设置页**：删掉 `src/settings-section.js` 与 `src/open-settings.js`，不再往 `settings.section` 插槽注册，`inject` 收回到空数组；官方设置页里不会再出现「侧栏设置」这一页（bundle 内 `settings.section` / `侧栏设置` 命中数均为 0）。
+- **对所有工作区与未分组开放**：ar-range 不再读 `skipWorkspaces`，也不再按工作区隐藏会话；未归入工作区的会话用「未分组 / Ungrouped」标签标注。实测同一份数据从「可见 21 行」变成「可见 43 行」（宿主里共 43 个会话座位）。
+- **活跃会话进「优先级」**：正在运行（`byId[id].running`）的会话强制落在第一段并排在最前；当天更新过的会话本来也在这一段。
+- 开关仍然只有顶行那一颗铃铛，状态写进 localStorage（`dateViewEnabled`），下次启动沿用。

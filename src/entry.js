@@ -4,12 +4,11 @@
  * 组装关系：
  *   宿主数据（sessions/workspaces 快照）+ 侧栏视图 store（分组方式）
  *     → 日期视图控制器（重排会话行、插日期标题）
- *     → 顶行铃铛（切换日期视图）+ 齿轮（打开官方设置页）
- *     → 官方设置页里的「侧栏设置」一页（注册进 settings.section 插槽）
+ *     → 顶行铃铛（切换消息视图）
  *
  * 与 dsh-claude-style 只有两种模式（见 coexist.js）：
- *   solo     页面没有主题：铃铛 + 齿轮全功能；
- *   dormant  页面有主题：只挂齿轮；不动列表、不碰主题的 DOM。
+ *   solo     页面没有主题：铃铛可用，列表由本插件接管；
+ *   dormant  页面有主题：不碰列表与主题的 DOM，铃铛转发给主题。
  * 模式在 reconcile() 里判定，设置变化、侧栏挂载、页面变动都会重新跑它。
  *
  * 缩放走 zoom.js：桌面 App 优先用宿主半边的窗口级 page zoom（better-sidebar 的
@@ -24,52 +23,15 @@ import { createZoom } from './zoom.js'
 import { createPortalFit } from './portal-fit.js'
 import { createViewStore } from './view-store.js'
 import { createDateView } from './date-view.js'
-import { createSettingsSection } from './settings-section.js'
 import { createTopbar } from './topbar.js'
 import { mountStyles } from './styles.js'
 import { findSidebar } from './sidebar-dom.js'
 
 export const name = PLUGIN_ID
 
-// 只声明 slots：设置页要注册进官方设置页的插槽，cordis 要求先声明 inject 才能读 ctx.slots。
-// 其他宿主服务（sessions / workspaces）用 ctx.get() 只读访问，不占 inject 槽位。
-export const inject = ['slots']
-
-/**
- * 把设置界面注册进宿主官方设置页。
- *
- * 契约（settings.section，kind=list、scope=root）：
- *   ctx.slots.inject('settings.section', () => ctx.slots.register({ name, id, order, label }, Component))
- * id 必须自取：复用宿主 id 会顶掉它自己的页面。label 允许是 thunk，每次投影重读。
- * 注册失败只是少一页设置，不能影响侧栏本身，所以整段包在 try 里。
- */
-function registerSettingsSection(ctx, { hostData, localeState, disposers }) {
-  const slots = ctx.slots ?? (typeof ctx.get === 'function' ? ctx.get('slots') : undefined)
-  if (slots === undefined || slots === null || typeof slots.inject !== 'function' || typeof slots.register !== 'function') {
-    console.warn(`${LOG_PREFIX} 宿主没有 slots 服务，跳过设置页注册`)
-    return
-  }
-  const SettingsSection = createSettingsSection({ hostData, localeState })
-  try {
-    const dispose = slots.inject('settings.section', () =>
-      slots.register(
-        {
-          name: 'settings.section',
-          // 自取 id：与内置页面并排，而不是替换它们。
-          id: 'codex-sidebar',
-          // 排在「Agent 预设」(20) 与 Claude Style(22) 之后。
-          order: 24,
-          // 每次投影重读：宿主语言晚就绪或中途切换时，导航标签跟着变。
-          label: () => localeState.get().settingsTitle
-        },
-        SettingsSection
-      )
-    )
-    if (typeof dispose === 'function') disposers.push(dispose)
-  } catch (error) {
-    console.warn(`${LOG_PREFIX} 注册设置页失败`, error)
-  }
-}
+// 不再往官方设置页注册任何东西，因此不需要声明 slots。
+// 宿主服务（sessions / workspaces）用 ctx.get() 只读访问，不占 inject 槽位。
+export const inject = []
 
 export function apply(ctx) {
   try {
@@ -127,7 +89,6 @@ function applyUnsafe(ctx) {
   })
 
   // 设置界面直接住进官方设置页，不再自己画浮层。
-  registerSettingsSection(ctx, { hostData, localeState, disposers })
 
   topbar = createTopbar({
     dateView,

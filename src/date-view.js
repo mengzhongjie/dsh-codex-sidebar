@@ -7,7 +7,6 @@
  * 被屏蔽的工作区、未分组会话只隐藏不删除。退出时还原顺序、标签与分组方式。
  */
 import { DATE_MODE_ATTR, OWN_ATTR } from './constants.js'
-import { readSettings } from './settings.js'
 import { labelsFor } from './locale.js'
 import { findFlatList, findSidebar, collectSeats, rowOfSeat, sessionIdOfRow } from './sidebar-dom.js'
 
@@ -224,8 +223,6 @@ export function createDateView({ hostData, viewStore, locale, refreshBell, prepa
     applying = true
     try {
       const copy = readCopy()
-      const settings = readSettings()
-      const skip = new Set(settings.skipWorkspaces)
       const titles = hostData.workspaceTitleBySession()
       const sessions = hostData.sessionSnapshot()
       const now = Date.now()
@@ -236,9 +233,11 @@ export function createDateView({ hostData, viewStore, locale, refreshBell, prepa
       for (const seat of collectSeats(container)) {
         const row = rowOfSeat(seat)
         const sessionId = sessionIdOfRow(row)
-        const workspace = titles.get(sessionId) ?? ''
+        // 未分组的会话也要进列表（消息视图对所有工作区与未分组开放），标签用「未分组」。
+        const workspace = titles.get(sessionId) ?? copy.ungrouped
         // 未分组会话、被屏蔽工作区：日期视图里不出现。
-        if (sessionId === '' || workspace === '' || skip.has(workspace)) {
+        // 认不出会话 id 的座位（理论上没有）直接跳过，别把它塞进段落里。
+        if (sessionId === '') {
           nextHidden.add(seat)
           continue
         }

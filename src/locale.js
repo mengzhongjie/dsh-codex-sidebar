@@ -19,6 +19,8 @@ const LABELS = {
     weekdays: ['星期日', '星期一', '星期二', '星期三', '星期四', '星期五', '星期六'],
     untitled: '未命名',
     skipped: '不进入消息视图',
+    // 未归入任何工作区的会话在消息视图里的标签
+    ungrouped: '未分组',
     settingsTitle: '侧栏设置',
     toggleDateView: '消息视图',
     skipSection: '不进入消息视图的工作区',
@@ -42,6 +44,7 @@ const LABELS = {
     weekdays: ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'],
     untitled: 'Untitled',
     skipped: 'Hidden from message view',
+    ungrouped: 'Ungrouped',
     settingsTitle: 'Sidebar settings',
     toggleDateView: 'Message view',
     skipSection: 'Workspaces hidden from message view',

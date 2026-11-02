@@ -141,3 +141,10 @@
 - 关键数据源：`sessions` 快照 `projectionsBySession[id].values.turnOutline` 的最后一轮（`response` 优先，空则 `prompt`）。`window.__DSH_BOOT__` 不含 ctx，取不到。
 - 验证：codexprobe 上 21 行可见、20 行带预览、悬停 `marquee=1` 且标签隐藏、关闭后完全还原（标题 0 / 预览 0 / 工作区行 9）。脚本 `.debug/final-check.mjs`、`.debug/metrics.mjs`、`.debug/marquee.mjs`。
 - 未做：真实 desktop App 仍需 Cmd+Q 重开验证；主题共存（dormant 模式）下未跑本轮预览的回归。
+
+## 2026-11-02 取消设置页 + 开放全部会话（本轮）
+
+- 用户：「既然是消息视图，我们直接取消我们的设置页，对所有工作区以及未分组开放，所有的活跃会话都会进入优先级栏目」。
+- 改动：删 `src/settings-section.js`、`src/open-settings.js`；`src/entry.js` 去掉 `createSettingsSection` import、`registerSettingsSection()` 与其调用，`inject` 改为 `[]`（`package.json` 的 `dsh.client.inject` 同步）；`src/date-view.js` 的 `arrange()` 去掉 `readSettings()/skipWorkspaces` 过滤，未分组会话用 `copy.ungrouped` 作标签，只跳过认不出 id 的座位；`src/locale.js` 增加 `ungrouped`（未分组 / Ungrouped）。
+- 实测（codexprobe，1440×900）：消息视图内 `totalRows=43、visibleRows=43`（改前可见 21），段落仍为 `[优先级, 昨天, 星期六, 星期五, 星期二, 更早]`，预览 42 条，行内标签覆盖全部工作区；bundle 里 `settings.section` 与「侧栏设置」命中 0。
+- 遗留：`src/locale.js` 里还留着设置页时期的死文案键（settingsIntro / skipHint / zoom* 等），下次清理；`src/styles.js` 里同类死样式也还没删。
