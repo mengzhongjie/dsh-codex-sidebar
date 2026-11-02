@@ -13,6 +13,16 @@
 /** 主题在页面上留下的标记前缀（用来判断主题装没装）。 */
 const THEME_MARKERS = ['data-dsh-claude', 'dsh-claude-', 'dshClaude']
 
+/**
+ * 主题自己的日期铃铛（没有主题时返回 null）。
+ *
+ * 主题的铃铛是它日期视图的唯一开关，点击它等于点击这个按钮 —— 所以我们的铃铛在
+ * 有主题时直接代它触发，用户看到的是「一颗铃铛，按下去就切换」。
+ */
+export function themeDateTrigger() {
+  return document.querySelector('.dsh-claude-active-shelf-actions button[class*="active-shelf-trigger"]')
+}
+
 /** 扫描页面上的主题痕迹：装了就返回 true。 */
 export function themePresent() {
   // body 属性：主题把每个偏好都镜像成一个 data-dsh-claude-* 属性。

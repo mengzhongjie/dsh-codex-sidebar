@@ -17,6 +17,14 @@ export const BODY_ATTR = 'data-codex-sidebar'
 /** 挂在 <body> 上的日期视图标记：日期视图开着时才有。 */
 export const DATE_MODE_ATTR = 'data-codex-sidebar-date-view'
 
+/**
+ * 挂在 <body> 上的标记：我们的铃铛已经挂上去了。
+ *
+ * 只有它存在时，样式表才会藏掉 dsh-claude-style 自己那颗日期铃铛 ——
+ * 保证「同一时间侧栏上只有一颗铃铛」，而且那颗一定点得动。
+ */
+export const BELL_ATTR = 'data-codex-sidebar-bell'
+
 /** 设置在本机的存储键（localStorage）。 */
 export const SETTINGS_KEY = 'dsh-codex-sidebar.settings'
 

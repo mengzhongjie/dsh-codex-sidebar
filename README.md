@@ -15,8 +15,10 @@ DSH（DeepSeek Harness）左侧栏的「日期视图」插件：把会话列表�
 - **铃铛开关**：顶行铃铛切换日期视图；日期视图开着时常亮。有会话在跑时亮一个小绿点（不写数字）。
 - **默认不接管**：装好后侧栏仍是宿主原本的工作区视图，只有按下铃铛才切到日期视图；选择会记住。
 - **屏蔽工作区**：设置页里勾掉的工作区不进日期视图（默认屏蔽标题为 `闲聊` 的工作区）。
-- **整体缩放**：4 个固定档位（80% / 100% / 125% / 150%）+ 自定义数字框（60% ~ 200%），做法与
-  `dsh-claude-style` 的整页缩放一致（详见「整页缩放」）。
+- **整体缩放**：4 个固定档位（80% / 100% / 125% / 150%）+ 自定义数字框（60% ~ 200%）。优先走窗口级
+  page zoom，拿不到就用页面 CSS 缩放并给 body 上的浮层做补偿，细节见「整页缩放」。
+- **与 dsh-better-sidebar 共处**：它的停靠按钮、底部面板、右侧栏都挂在 body 上（不在 `#root` 里），
+  页面 CSS 缩放时由 `src/portal-fit.js` 单独补放大 —— 125% 下位置、字号、圆角都跟界面一致。
 - **设置进官方设置页**：三张卡片（日期视图、屏蔽工作区、整体缩放）注册成官方设置页的一个 section，不是自建浮层。
 - **随界面语言**：段落标题与设置页文案跟随宿主语言（中文 / 英文）。宿主语言比插件晚就绪
   或中途切换时会自动跟上（订阅 locale 服务快照 + 短暂轮询兜底，见 `src/locale.js`）。
@@ -51,7 +53,8 @@ node scripts/install.mjs --profile codexprobe --uninstall        # 卸
 | 模式 | 什么时候 | 行为 |
 | --- | --- | --- |
 | `solo` | 没装主题 | 铃铛 + 齿轮，日期视图与缩放全功能 |
-| `dormant` | 装了主题 | 只挂齿轮；日期视图与页面缩放都交给主题，本插件不碰列表、不写任何缩放标记 |
+| `dormant` | 装了主题 | 只挂齿轮（外加一颗铃铛）；铃铛点的是**主题自己的**日期视图（同一个功能，让它管），
+  本插件不碰列表、不写任何缩放标记 |
 
 判定只看主题的公开痕迹：`body` 上有 `data-dsh-claude*` 属性，或页面上有 `dsh-claude-` 前缀的类名。
 让位时设置页只显示一句说明（不再提供会改动主题界面的开关）：
@@ -67,15 +70,26 @@ node scripts/install.mjs --profile codexprobe --uninstall        # 卸
 
 ## 整页缩放
 
-和 `dsh-claude-style` 用同一套做法，**绝不写 `body.style.zoom`**：
+缩放分两条路，优先用**窗口级**，拿不到才退回**页面 CSS**：
 
-1. `body[data-codex-sidebar][data-codex-sidebar-page-zoom]` 上 `zoom: var(--codex-sidebar-page-zoom-factor)`；
-2. 非 100% 时同时写 `--codex-sidebar-page-width/height`（`innerWidth/倍率`），给宿主浮层当封顶尺寸；
-3. 设置页等 `:is(dialog,[role="dialog"])` 用页面尺寸封顶，缩放后不会溢出窗口。
+1. **窗口级**（`lib/index.js` 的 `/codex-sidebar/api/zoom`）：宿主半边调 Electron 的
+   `webContents.setZoomFactor()`。这是浏览器自己做的缩放，布局、`position: fixed`、body 上的浮层
+   一起放大，没有任何坐标换算问题。
+   实测结论：**现在的桌面宿主做不到** —— 宿主进程带 `ELECTRON_RUN_AS_NODE=1`，插件 `require('electron')`
+   拿到的是路径字符串；宿主 `lib/main.js` 里只有 `getZoomFactor()`（给菜单换算坐标用），没有
+   `setZoomFactor`；`ipcMain` 频道表里也没有任何 zoom 通道。所以这条路由保留（网页版返回
+   `{"supported":false}`，将来宿主放开会自动生效），实际生效的是下一条。
+2. **页面 CSS**：`body[data-codex-sidebar-page-zoom] #root { transform: scale(倍率); width/height = 视口 ÷ 倍率 }`。
+   用 `transform` 而不是 `zoom` 是实测结论：宿主和第三方插件都用 `getBoundingClientRect` 的**视觉像素**
+   给 body 上的浮层摆位，`transform` 下这些数值仍然正确；换成 `html/body { zoom }` 后账号菜单会被算到
+   视口下方（`y=898 > 900`），「缩放到 125% 后设置页打不开」就是这么来的。
+3. **浮层补偿**（`src/portal-fit.js`）：`transform` 不在 body 上那些浮层的祖先链里，它们的「位置」对、
+   「大小」却停在 100% 尺度（弹层字小一圈、`dsh-better-sidebar` 的底部面板压到输入框上）。
+   做法：给浮层根节点（含 `body > static 跳板 > fixed 容器` 这种挂法）补 `zoom: 倍率`，
+   把子树里行内写的 `left/top/right/bottom` 除以倍率，满屏浮层再写 `width/height = 视口 ÷ 倍率`。
+   宽度/高度**不**除以倍率：那是设计像素，放大后本来就该更高。
 
-之前那版直接写 `body.style.zoom`：有主题时它会把主题的 115% 行内覆盖成 100%，页面按 100% 画、
-主题却仍按 1.15 写尺寸变量，于是右侧/底部空出一条，输入框光标与浮层整体偏移。现在改成样式表 + 变量后，
-两种宿主都不再出现这个问题（实测见「验证」）。
+倍率只在 `solo` 模式（没装主题）生效；有主题时主题有自己的 `pageZoom`，我们撤干净，避免两套缩放相乘。
 
 ## 设置与持久化
 
@@ -102,7 +116,7 @@ npm run watch     # 持续构建
 
 | 文件 | 职责 |
 | --- | --- |
-| `src/entry.js` | 组装、MutationObserver 调度、`solo` / `dormant` 判定、整页缩放、启动自愈、卸载还原 |
+| `src/entry.js` | 组装、MutationObserver 调度、`solo` / `dormant` 判定、整页缩放接线、启动自愈、卸载还原 |
 | `src/constants.js` | 选择器、属性名、默认设置、缩放档位与变量名 |
 | `src/host-data.js` | 只读宿主 `sessions` / `workspaces` 服务 |
 | `src/view-store.js` | 宿主侧栏视图 store：切扁平 / 还原分组 / 备份 |
@@ -113,7 +127,9 @@ npm run watch     # 持续构建
 | `src/open-settings.js` | 齿轮：打开官方设置页并跳到本插件那一页 |
 | `src/settings.js` | localStorage 读写与订阅 |
 | `src/locale.js` | 语言源（`createLocale`：读 locale 服务 `active`，订阅变化 + 轮询兜底）与文案 |
-| `src/coexist.js` | 主题检测（只看公开痕迹） |
+| `src/coexist.js` | 主题检测（只看公开痕迹）、主题日期铃铛定位 |
+| `src/zoom.js` | 缩放控制器：探测窗口级路由，HTTP 路线 / 页面 CSS 路线切换与还原 |
+| `src/portal-fit.js` | 页面 CSS 缩放时给 body 上的浮层（宿主菜单、设置页、better-sidebar 面板）补放大 |
 | `src/styles.js` | 插件自带样式（自有节点 + 整页缩放规则） |
 
 ### 验证
@@ -130,6 +146,12 @@ URL=$(grep -o "http://127.0.0.1:49800/?token=[^ ]*" .debug/probe-web.log | tail 
 env -u all_proxy -u ALL_PROXY -u http_proxy -u HTTP_PROXY -u https_proxy -u HTTPS_PROXY \
   PLAYWRIGHT_BROWSERS_PATH=$PWD/.playwright-browsers \
   node .debug/verify.mjs "$URL" <探针.mjs> <截图.png>
+```
+
+需要「先写设置再刷新」的验证（缩放在 localStorage 里、只在启动时落地）用 `.debug/verify2.mjs`：
+
+```bash
+node .debug/verify2.mjs "$URL" .debug/prep-zoom.js .debug/measure-portal-fit.js .debug/shot.png
 ```
 
 现成的探针：`.debug/eval-solo.js`（无主题：日期视图进出）、`.debug/eval-zoom.js`（两种宿主的整页缩放）、

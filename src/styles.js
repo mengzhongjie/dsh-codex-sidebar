@@ -11,21 +11,26 @@
 /** 样式表内容：集中一处，便于校对。 */
 const CSS = `
 /*
- * 整页缩放（照 dsh-claude-style 的做法，说明见 constants.js 的 ZOOM_* 注释）。
+ * 整页缩放（说明见 constants.js 的 ZOOM_* 注释）。
  *
- * 只挂在本插件自己的标记上：有主题时我们根本不写 data-codex-sidebar-page-zoom，
- * 所以不会和主题的 body[data-dsh-claude-page-zoom] 规则同时给 body 上 zoom。
- * 倍率走自定义属性；非 100% 时 body 按「窗口尺寸 / 倍率」定宽高并裁掉滚动，
- * 否则 vh/vw 会再乘一次倍率，页面底部会多出一条空白带。
- * 注意：这里绝不写行内 zoom —— 行内样式会把主题的 pageZoom 整条盖掉。
+ * 缩放对象是 #root 而不是 body，手段是 transform 而不是 CSS zoom —— 这一条是实测结论：
+ * 宿主把弹层（账号菜单、设置页）portal 到 body 上用 position:fixed + getBoundingClientRect
+ * 定位，而 body 上的 CSS zoom 会让布局像素与视口像素不同源，缩放到 125% 时菜单被算到
+ * 视口下方（y=898，菜单项 903，100% 时是 y=732），于是「调整缩放后设置打不开」。
+ * transform 下 getBoundingClientRect 给的是视觉坐标，宿主的算法仍然正确。
+ *
+ * width/height 按「窗口尺寸 / 倍率」写死（由 JS 算出），这样缩放后正好铺满窗口；
+ * 只挂在本插件自己的标记上：有主题时我们不写 data-codex-sidebar-page-zoom，不与主题的
+ * pageZoom 叠加。
  */
-body[data-codex-sidebar][data-codex-sidebar-page-zoom] {
-  zoom: var(--codex-sidebar-page-zoom-factor, 1);
+body[data-codex-sidebar][data-codex-sidebar-page-zoom] #root {
+  transform: scale(var(--codex-sidebar-page-zoom-factor, 1));
+  transform-origin: 0 0;
+  width: var(--codex-sidebar-page-width, 100vw);
+  height: var(--codex-sidebar-page-height, 100vh);
 }
 
-body[data-codex-sidebar][data-codex-sidebar-page-zoom]:not([data-codex-sidebar-page-zoom="1"]) {
-  width: var(--codex-sidebar-page-width, 100%);
-  height: var(--codex-sidebar-page-height, 100%);
+body[data-codex-sidebar][data-codex-sidebar-page-zoom] {
   overflow: hidden;
   margin: 0;
 }
@@ -49,6 +54,10 @@ body[data-codex-sidebar] :is(dialog, [role="dialog"]) {
   display: flex;
   align-items: center;
   gap: 2px;
+}
+
+/* 挂在顶行时靠右推（那一行左边是品牌按钮）；挂在工作区行时不用，那个图标组本来就靠右。 */
+.codex-sidebar-actions-top {
   margin-left: auto;
 }
 
@@ -145,10 +154,11 @@ body[data-codex-sidebar] :is(dialog, [role="dialog"]) {
 }
 
 /*
- * 接管模式：藏掉 dsh-claude-style 自己的日期铃铛。
- * 只藏它那一个 trigger 按钮（搜索按钮与其它动作不动），主题卸载后这条规则自然失效。
+ * 我们的铃铛在场时，藏掉 dsh-claude-style 自己那颗日期铃铛：侧栏上只留一颗铃铛，
+ * 位子固定、一定点得动（点击会转交给主题的铃铛，功能不丢）。
+ * 只藏它那一个 trigger（搜索按钮与其它动作不动）；我们卸载后标记消失，主题那颗自动回来。
  */
-[data-codex-sidebar-takeover] .dsh-claude-active-shelf-actions button[class*="active-shelf-trigger"] {
+[data-codex-sidebar-bell] .dsh-claude-active-shelf-actions button[class*="active-shelf-trigger"] {
   display: none !important;
 }
 

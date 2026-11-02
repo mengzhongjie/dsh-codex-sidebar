@@ -42,6 +42,22 @@ function waitFor(pick, timeout = 1500) {
   })
 }
 
+/**
+ * 把一次点击推到当前事件结束之后。
+ *
+ * 为什么必须推迟：齿轮的 click 现在还在派发中，宿主在 document 上挂着「点别处就关」，
+ * 我们同步点开菜单/设置页 → 同一个事件冒泡到 document → 刚打开的面板当场被关掉
+ * （真机实测：真实鼠标点齿轮 menus=0、dialogs=0）。setTimeout(0) 让点击落在事件之后。
+ */
+function clickLater(element) {
+  return new Promise(resolve => {
+    window.setTimeout(() => {
+      element.click()
+      resolve()
+    }, 0)
+  })
+}
+
 /** 设置页是否开着：它的左栏导航项类名以 navCell 结尾（宿主构件的稳定片段）。 */
 function settingsPageOpen() {
   return [...document.querySelectorAll(NAV_BUTTON_SELECTOR)].some(element =>
@@ -59,7 +75,7 @@ async function jumpToSection(copy) {
     })
   )
   if (button === null) return false
-  button.click()
+  await clickLater(button)
   return true
 }
 
@@ -77,7 +93,7 @@ export async function openOfficialSettings(copy) {
     document.querySelector('[data-slot="settings.launcher"] button') ??
     document.querySelector('[data-slot="settings.launcher"]')
   if (launcher === null) return false
-  launcher.click()
+  await clickLater(launcher)
 
   const item = await waitFor(() =>
     [...document.querySelectorAll(MENU_ITEM_SELECTOR)].find(element =>
@@ -85,7 +101,7 @@ export async function openOfficialSettings(copy) {
     )
   )
   if (item === null) return false
-  item.click()
+  await clickLater(item)
 
   return jumpToSection(copy)
 }

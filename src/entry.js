@@ -12,24 +12,16 @@
  *   dormant  页面有主题：只挂齿轮；不动列表、不碰主题的 DOM。
  * 模式在 reconcile() 里判定，设置变化、侧栏挂载、页面变动都会重新跑它。
  *
- * 整页缩放抄的是 dsh-claude-style 的做法（见 constants.js 的 ZOOM_* 注释）：
- * 属性 + 自定义属性 + 样式表规则，绝不写行内 body.style.zoom；主题在场时让位，
- * 由主题自己的 pageZoom 负责，两边不会同时给 body 上 zoom。
+ * 缩放走 zoom.js：桌面 App 优先用宿主半边的窗口级 page zoom（better-sidebar 的
+ * 面板才会跟着一起放大），网页版退回页面 CSS；主题在场时仍让位给主题的 pageZoom。
  */
-import {
-  PLUGIN_ID,
-  LOG_PREFIX,
-  BODY_ATTR,
-  DATE_MODE_ATTR,
-  ZOOM_ATTR,
-  ZOOM_VAR,
-  ZOOM_WIDTH_VAR,
-  ZOOM_HEIGHT_VAR
-} from './constants.js'
+import { PLUGIN_ID, LOG_PREFIX, BODY_ATTR, DATE_MODE_ATTR } from './constants.js'
 import { readSettings, writeSettings, subscribeSettings } from './settings.js'
 import { createHostData } from './host-data.js'
 import { createLocale } from './locale.js'
-import { themePresent } from './coexist.js'
+import { themePresent, themeDateTrigger } from './coexist.js'
+import { createZoom } from './zoom.js'
+import { createPortalFit } from './portal-fit.js'
 import { createViewStore } from './view-store.js'
 import { createDateView } from './date-view.js'
 import { createSettingsSection } from './settings-section.js'
@@ -43,39 +35,6 @@ export const name = PLUGIN_ID
 // 只声明 slots：设置页要注册进官方设置页的插槽，cordis 要求先声明 inject 才能读 ctx.slots。
 // 其他宿主服务（sessions / workspaces）用 ctx.get() 只读访问，不占 inject 槽位。
 export const inject = ['slots']
-
-/**
- * 缩放时把「页面自身的尺寸」写成两个变量。
- *
- * 页面被 zoom 缩放后，vh/vw 会再乘一次倍率，宿主的弹层按视口单位封顶就会超出窗口；
- * 把窗口尺寸除以倍率写成 --codex-sidebar-page-width/height，样式表就能用它封顶。
- * （与 dsh-claude-style 的 shared/page-scale.ts 同一个算法。）
- */
-function writePageSize(factor) {
-  document.body.style.setProperty(ZOOM_WIDTH_VAR, `${Math.round(window.innerWidth / factor)}px`)
-  document.body.style.setProperty(ZOOM_HEIGHT_VAR, `${Math.round(window.innerHeight / factor)}px`)
-}
-
-/**
- * 把缩放倍率写到页面上（抄 dsh-claude-style 的样式表缩放，不写行内 zoom）。
- *
- * @param zoom    倍率（1 表示 100%）
- * @param enabled false 时把三件套全部撤掉（有主题时由主题负责缩放）
- */
-function applyZoom(zoom, enabled) {
-  const body = document.body
-  const factor = Math.round(zoom * 100) / 100
-  if (!enabled || Math.abs(factor - 1) < 0.001) {
-    body.removeAttribute(ZOOM_ATTR)
-    body.style.removeProperty(ZOOM_VAR)
-    body.style.removeProperty(ZOOM_WIDTH_VAR)
-    body.style.removeProperty(ZOOM_HEIGHT_VAR)
-    return
-  }
-  body.style.setProperty(ZOOM_VAR, String(factor))
-  body.setAttribute(ZOOM_ATTR, String(factor))
-  writePageSize(factor)
-}
 
 /**
  * 把设置界面注册进宿主官方设置页。
@@ -135,6 +94,10 @@ function applyUnsafe(ctx) {
 
   const hostData = createHostData(ctx)
   const viewStore = createViewStore(ctx)
+  // 缩放控制器：桌面 App 会走宿主半边的窗口级 page zoom，网页版退回页面 CSS。
+  const zoom = createZoom()
+  // 页面 CSS 缩放时，挂在 body 上的浮层（宿主菜单、设置页、better-sidebar 面板）要单独跟着放大。
+  const portalFit = createPortalFit()
 
   /** 顶行动作区（延迟赋值：date-view 的回调要引用它刷新铃铛）。 */
   let topbar = null
@@ -158,6 +121,20 @@ function applyUnsafe(ctx) {
     hostData,
     getLabels: () => localeState.get(),
     onToggle: active => writeSettings({ dateViewEnabled: active }),
+    // 有主题时，铃铛点的是主题自己的日期视图：功能是同一件事，让它管，避免两套实现搬同一批行。
+    // 这样我们的铃铛在任何组合下都「有东西可点」，不会出现装上去却按下去没反应的情况。
+    onBellClick: () => {
+      const trigger = themeDateTrigger()
+      if (trigger === null) return false
+      trigger.click()
+      return true
+    },
+    // 按下态：委派给主题时读主题铃铛自己的 aria-pressed，否则读我们的日期视图状态。
+    bellPressed: () => {
+      const trigger = themeDateTrigger()
+      if (trigger === null) return dateView.isActive()
+      return trigger.getAttribute('aria-pressed') === 'true'
+    },
     // 齿轮：打开官方设置页并切到本插件那一页。
     openSettings: () => {
       openOfficialSettings(localeState.get()).catch(() => {
@@ -166,14 +143,42 @@ function applyUnsafe(ctx) {
     }
   })
 
+  /**
+   * 按当前模式落地设置里的倍率。
+   *
+   * solo：用我们的缩放（窗口级优先）；dormant：主题有自己的 pageZoom，我们撤干净，
+   * 免得两套缩放相乘，把宿主弹层顶出窗口。
+   */
+  function applyZoomFromSettings() {
+    if (mode === 'solo') {
+      zoom.apply(readSettings().zoom)
+      // 只有「页面 CSS 缩放」这条路线需要给 body 上的浮层补放大；
+      // 窗口级缩放是浏览器自己做的，页面里再加一层就会放大两次。
+      applyPortalFit(readSettings().zoom, zoom.mode !== 'window')
+      return
+    }
+    zoom.reset()
+    portalFit.apply(1)
+  }
+
+  /** 落地浮层补偿：倍率为 1 或走窗口级缩放时一律还原。 */
+  function applyPortalFit(factor, enabled) {
+    portalFit.apply(enabled === true ? factor : 1)
+  }
+
   /** reconcile 重入保护：它内部会写设置，设置订阅又会回调它。 */
   let reconciling = false
 
-  /** 应用模式带来的可见变化：只有日期视图开着时才需要铃铛。 */
+/**
+   * 记住当前模式。
+   *
+   * 铃铛不再随模式隐藏：有主题时它委派给主题的日期视图，无主题时切我们自己的日期视图。
+   * 早先的「有主题就只挂齿轮」让侧栏上只剩主题那颗铃铛可点，用户按下去没反应时
+   * 既分不清是谁的、也没有替代入口——这正是「铃铛没法用」的来源。
+   */
   function setMode(next) {
     if (mode === next) return
     mode = next
-    topbar?.setShowBell(next !== 'dormant')
   }
 
   /**
@@ -205,8 +210,7 @@ function applyUnsafe(ctx) {
       const settings = readSettings()
       const next = themePresent() ? 'dormant' : 'solo'
       setMode(next)
-      // 有主题时缩放归主题的 pageZoom，我们一律撤掉自己的三件套。
-      applyZoom(settings.zoom, next === 'solo')
+      applyZoomFromSettings()
 
       if (next === 'dormant') {
         if (dateView.isActive()) dateView.disable()
@@ -237,9 +241,10 @@ function applyUnsafe(ctx) {
   const observer = new MutationObserver(() => schedule())
   observer.observe(document.body, { childList: true, subtree: true })
 
-  // 窗口尺寸变化：缩放中的页面尺寸变量要跟着重算。
+  // 窗口尺寸变化：CSS 缩放路线下，页面尺寸变量要跟着重算，满屏浮层也要重新量。
   const onResize = () => {
-    if (document.body.hasAttribute(ZOOM_ATTR)) writePageSize(readSettings().zoom)
+    zoom.handleResize()
+    portalFit.handleResize()
   }
   window.addEventListener('resize', onResize)
   disposers.push(() => window.removeEventListener('resize', onResize))
@@ -251,9 +256,9 @@ function applyUnsafe(ctx) {
   }))
 
   // 设置变化：缩放立即生效，开关与共存模式交给 reconcile。
-  disposers.push(subscribeSettings(settings => {
+  disposers.push(subscribeSettings(() => {
     reconcile()
-    applyZoom(settings.zoom, mode === 'solo')
+    applyZoomFromSettings()
     dateView.schedule()
   }))
 
@@ -261,11 +266,20 @@ function applyUnsafe(ctx) {
   const boot = window.setInterval(() => {
     if (findSidebar() === null) return
     window.clearInterval(boot)
+    // 自愈必须先于 reconcile：reconcile 里 enable() 会写一份新的备份键并把分组切成扁平，
+    // 放到它后面就会把「刚刚才扁平好」的分组又还原回工作区（真机踩到：启动时日期视图
+    // 标记亮着、列表却还是工作区分组）。这里只处理上一个进程留下的陈旧备份。
+    if (!themePresent()) healLeftoverFlat()
     reconcile()
-    // 自愈只在「我们自己会动分组」的模式下做：dormant 时分组是主题在管。
-    if (mode !== 'dormant') healLeftoverFlat()
     topbar.mount()
     schedule()
+    // 探测宿主能不能做窗口级缩放，再把设置里的倍率落地。
+    // 主页面的缩放一旦由窗口接管，better-sidebar 那类挂在 body 上的面板才会跟着一起放大。
+    portalFit.start()
+    zoom.start().then(route => {
+      applyZoomFromSettings()
+      console.log(`${LOG_PREFIX} zoom route → ${route}`)
+    })
   }, 200)
 
   // 卸载：把所有改动还原，宿主恢复到装插件之前的样子。
@@ -275,7 +289,9 @@ function applyUnsafe(ctx) {
     if (frameHandle !== 0) window.cancelAnimationFrame(frameHandle)
     dateView.disable()
     topbar.unmount()
-    applyZoom(1, false)
+    zoom.reset()
+    zoom.dispose()
+    portalFit.dispose()
     document.body.removeAttribute(BODY_ATTR)
     document.body.removeAttribute(DATE_MODE_ATTR)
     for (const dispose of disposers) {
