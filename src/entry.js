@@ -82,7 +82,14 @@ function applyUnsafe(ctx) {
    * onChange 里排一次重排：id 是异步查到的，查到后列表得跟着变。
    */
   let dateView = null
-  const superagent = createSuperagentBridge({ onChange: () => dateView?.schedule() })
+  const superagent = createSuperagentBridge({
+    onChange: () => {
+      // 主会话 id 是异步查到的：查到后必须真的重排一次，只排一帧容易和宿主自己的
+      // 隐藏动作撞在一起，表现就是「id 有了，列表却没变」。
+      dateView?.arrange()
+      dateView?.schedule()
+    },
+  })
 
   dateView = createDateView({
     hostData,
@@ -269,6 +276,7 @@ function applyUnsafe(ctx) {
       document.body.removeAttribute(BODY_ATTR)
       document.body.removeAttribute(DATE_MODE_ATTR)
     })
+    quietly('停止诊断上报', () => clearInterval(debugTimer))
     quietly('释放 superagent 探测', () => superagent.dispose())
     for (const dispose of disposers) quietly('释放订阅', dispose)
   })

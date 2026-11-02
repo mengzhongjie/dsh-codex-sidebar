@@ -408,10 +408,14 @@ export function createDateView({ hostData, viewStore, locale, refreshBell, prepa
         // 主会话固定进「优先级」段落并排在最前：它是这个工作区的对话入口，不该按时间沉下去。
         const bucket = isMain ? { text: copy.today, rank: 0 } : (running ? { text: copy.today, rank: 0 } : bucketOf(time, now, copy))
         if (isMain) {
+          // 类要挂在真正带 data-row-key 的那一行上：座位只是它的外壳，
+          // 样式表的 [data-row-key^="session:"] 规则命中不了外壳（实测主会话因此一直不见）。
           seat.classList.add(MAIN_SESSION_CLASS)
+          row?.classList.add(MAIN_SESSION_CLASS)
           mainSeats.add(seat)
         } else {
-          if (seat.classList.contains(MAIN_SESSION_CLASS)) seat.classList.remove(MAIN_SESSION_CLASS)
+          seat.classList.remove(MAIN_SESSION_CLASS)
+          row?.classList.remove(MAIN_SESSION_CLASS)
           if (seat.style.display !== '') seat.style.display = ''
           // 这一轮它又走正常流程了（比如对面没装/刚卸载），不再需要我们替它藏。
           leashedSeats.delete(seat)
@@ -545,7 +549,10 @@ export function createDateView({ hostData, viewStore, locale, refreshBell, prepa
     headers.clear()
     stripChips()
     stripPreviews()
-    for (const seat of mainSeats) seat.classList.remove(MAIN_SESSION_CLASS)
+    for (const seat of mainSeats) {
+      seat.classList.remove(MAIN_SESSION_CLASS)
+      rowOfSeat(seat)?.classList.remove(MAIN_SESSION_CLASS)
+    }
     mainSeats.clear()
     for (const seat of hiddenSeats) seat.style.display = ''
     hiddenSeats.clear()

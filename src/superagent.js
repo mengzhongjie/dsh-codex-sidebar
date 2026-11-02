@@ -24,6 +24,9 @@ const REFRESH_MS = 5000
 /** 没查到时的重试间隔：没有装 superagent 的环境会一直 404，别问太勤。 */
 const RETRY_MS = 30000
 
+/** 还没成功过一次时的重试间隔：开机瞬间它的路由可能还没就绪，快问几次。 */
+const FIRST_TRY_MS = 1500
+
 /** 连续失败几次就认定这个环境没有 superagent。 */
 const MAX_MISSES = 3
 
@@ -56,7 +59,7 @@ export function createSuperagentBridge({ onChange }) {
   let disposed = false
 
   const fresh = () => checkedAt !== 0 && Date.now() - checkedAt < REFRESH_MS
-  const giveUp = () => misses >= MAX_MISSES
+  const giveUp = () => checkedAt === 0 && misses >= MAX_MISSES
 
   /** 问一次宿主，成功就把 masterId 与 masterIds 合并成集合。 */
   async function read() {
@@ -76,6 +79,7 @@ export function createSuperagentBridge({ onChange }) {
     if (Array.isArray(state.masterIds)) for (const id of state.masterIds) if (typeof id === 'string') next.add(id)
     misses = 0
     checkedAt = Date.now()
+    lastMissAt = 0
     const changed = next.size !== masters.size || [...next].some(id => !masters.has(id))
     masters = next
     if (changed) onChange?.()
@@ -85,7 +89,7 @@ export function createSuperagentBridge({ onChange }) {
   function ensure() {
     if (disposed || inflight !== null) return
     if (fresh() || giveUp()) return
-    if (checkedAt === 0 && Date.now() - lastMissAt < RETRY_MS) return
+    if (checkedAt === 0 && Date.now() - lastMissAt < FIRST_TRY_MS) return
     inflight = read().finally(() => {
       inflight = null
       if (misses > 0 && misses < MAX_MISSES) lastMissAt = Date.now()
