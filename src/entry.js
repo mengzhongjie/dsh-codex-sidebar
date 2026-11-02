@@ -194,26 +194,40 @@ function applyUnsafe(ctx) {
     if (frameHandle !== 0) return
     frameHandle = window.requestAnimationFrame(() => {
       frameHandle = 0
-      if (!dateView.isActive()) topbar.mount()
+      // 无论日期视图是否开启，顶栏铃铛都应保持挂载（topbar.mount 内部有幂等检查：挂点未变时立即返回）；
+      // 避免侧栏折叠再展开（折叠时 unmount 撤掉铃铛）或宿主重渲染时铃铛丢失无法退出消息视图。
+      topbar.mount()
       reconcile()
       dateView.schedule()
     })
   }
 
+  /** 判断一个节点是不是本插件自己放进去的（含悬停滑动套的轨道）。 */
+  function isOurNode(node) {
+    if (!(node instanceof Element)) return false
+    return node.hasAttribute(OWN_ATTR)
+      || node.classList.contains(MARQUEE_CLASS)
+      || node.closest('[' + OWN_ATTR + ']') !== null
+  }
+
   /**
    * 判断一条变动是不是我们自己写的。
    *
-   * 我们的标题、行内标签都带 OWN_ATTR，落在它们内部的改动不该再触发一轮重排：
-   * 否则「写节点 → 观察者 → 重排 → 写节点」会自激（实测每秒上千次 DOM 变动，
-   * 鼠标扫过会话行时整行轻微抖动就是这个）。
+   * 两个面都要看：target 落在自有节点里（改铃铛、改预览），或者 target 是宿主节点、
+   * 但增删的孩子全是自有节点（往宿主行里塞标签与预览、往列表里插段落标题）。
+   * 只看其中一面都会把自生变动当成宿主变化，于是「写节点 → 观察者 → 重排 → 写节点」
+   * 自激（实测每秒上千次 DOM 变动，鼠标扫过会话行时整行轻微抖动）。
    */
   function isOurMutation(record) {
     const target = record.target
-    if (!(target instanceof Element)) return false
-    if (target.closest('[' + OWN_ATTR + ']') !== null) return true
-    // 悬停滑动会往标题里套一层轨道：这些变动属于我们，不能当成宿主变化去重排，
-    // 否则重排会重建行、悬停当场结束，滑动刚起步就被自己掐掉。
-    return target.closest('.' + MARQUEE_CLASS) !== null
+    if (target instanceof Element) {
+      if (target.closest('[' + OWN_ATTR + ']') !== null) return true
+      // 悬停滑动会往标题里套一层轨道：这些变动属于我们，不能当成宿主变化去重排，
+      // 否则重排会重建行、悬停当场结束，滑动刚起步就被自己掐掉。
+      if (target.closest('.' + MARQUEE_CLASS) !== null) return true
+    }
+    const altered = [...record.addedNodes, ...record.removedNodes]
+    return altered.length > 0 && altered.every(isOurNode)
   }
 
   // 侧栏与列表都是宿主渲染的：监听整页变化，合并到一帧里处理。
@@ -255,10 +269,7 @@ function applyUnsafe(ctx) {
     reconcile()
     topbar.mount()
     schedule()
-    // 探测宿主能不能做窗口级缩放，再把设置里的倍率落地。
-    // 主页面的缩放一旦由窗口接管，better-sidebar 那类挂在 body 上的面板才会跟着一起放大。
-    portalFit.start()
-    }, 200)
+  }, 200)
 
   // 卸载：把所有改动还原，宿主恢复到装插件之前的样子。
   ctx.effect(() => () => {

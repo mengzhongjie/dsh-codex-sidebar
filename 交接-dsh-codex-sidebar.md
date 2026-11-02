@@ -229,3 +229,38 @@
 - `osascript -e 'quit app "DeepSeek Harness"'` 对桌面 App 无效，仍要用 `pkill -TERM -f "DeepSeek Harness.app/Contents/MacOS/DeepSeek Harness"`。
 - 守卫脚本原来用 `pgrep -f` 判断 App 是否在跑，实测匹配不到，会在运行中替换主题 lib；改成 `ps -Ao comm= | grep -qxF` 才可靠。
 - 主题的 `.debug/` 与 `shots/` 在这两个仓库里都是忽略目录，探针与截图不要提交。
+
+## 2026-11-02 可用性检查与日常 Bug 修复
+
+针对日常高频使用场景进行了可用性排查，修复了以下日常使用可能触发的问题：
+1. **侧栏折叠再展开后铃铛永久丢失**：`src/entry.js` 的 `schedule()` 中移除了 `!dateView.isActive()` 条件限制；`topbar.mount()` 自身具备 `actions.parentElement === host` 幂等保护，保证侧栏折叠展开后铃铛正常恢复，避免无法退出消息视图。
+2. **初始化运行时未捕获异常**：删除了 `src/entry.js` 中不存在的方法调用 `portalFit.start()`，消除侧栏就绪时必报的 `TypeError`。
+3. **鼠标快速扫过列表导致标题横向滑动失控且偏位**：重构 `src/date-view.js` 的 `startMarquee` / `stopMarquee`，引入排队 token 机制，当鼠标在两帧延迟内移出时立即取消并终止后续动画；在 `disable()` 和 `dispose()` 中增加 `stopAllMarquees()` 彻底清除活跃滑动与 track 包装，避免文字停留偏位与嵌套。
+4. **运行中会话小绿点背景损坏**：`src/styles.js` 中的 CSS 变量语法修正为 `--dsw-alias-state-success-primary`（回退标准绿），小绿点恢复正常显示。
+5. **点击铃铛误触发工作区折叠**：`src/topbar.js` 为铃铛补充 `pointerdown`、`mousedown`、`pointerup`、`mouseup` 的 `stopPropagation()` 拦截，避免宿主工作区行折叠展开。
+6. **新建会话排序沉底**：`src/date-view.js` 会话时间提取优先使用 `updatedAt`，若无则使用 `createdAt`，再次兜底当前时间 `now`，确保新建会话处于「优先级/今天」，不会因时间为 0 被扔到「更早」最末端。
+7. **多余旧段落标题（孤儿 Header）残留**：`src/date-view.js` 的 `arrange()` 在复用标题后，对 `spareHeaders` 中未被复用的多余旧标题显式调用 `remove()`，防止段落减少时留下孤儿标题。
+8. **微任务自激与多余调度**：`src/entry.js` 扩展 `isOurMutation` 判定，检查 `addedNodes` / `removedNodes` 是否全为本插件节点，杜绝每次修改列表都多跑一轮 rAF 调度。
+9. **内存态防掉**：`src/settings.js` 增加 `memorySettings` 缓存，在 `localStorage` 写入失败时保证本次会话内设置依然生效。
+10. **代码规范**：所有修改位置均补充了完整清晰的中文注释。产物已重新打包 `npm run build`。
+
+### 上述十条的复核（2026-11-02 19:45，实测）
+
+逐条对着代码和真实页面核过，结论：十条全部属实，没有需要返工的假修复。
+
+- 折叠再展开：实测折叠后铃铛消失、展开后回来（`bellAfterCollapse=false / bellAfterExpand=true`），
+  点下去进消息视图 46 行——第 1 条成立。
+- `grep portalFit.start src/` 无命中——第 2 条成立。
+- 快速扫过前 10 行后：`tracksLeft=0 / marqueeLeft=0 / 残留 transform=0`；真悬停仍是
+  `matrix(1,0,0,1,-120.86,0)` 且 1.2 秒后不再变化——第 3 条成立。
+- 小绿点：插入一个 `.codex-sidebar-dot` 实测 `background=rgb(34,197,94)`、`5px`、`50%`，
+  宿主的语义绿 token 解析成功，不是靠 `#35c76a` 兜底——第 4 条成立。
+- 铃铛 `pointerdown/mousedown/pointerup/mouseup` 四道 `stopPropagation` 都在——第 5 条成立。
+- `updatedAt → createdAt → now` 三级兜底在 `date-view.js` 的 `arrange()` 里——第 6 条成立。
+- `spareHeaders` 复用后对未复用的旧标题显式 `remove()`——第 7 条成立。
+- 第 8 条原来分成两处判（函数头看 `target`、尾部用 `isOurNode` 再看 `addedNodes/removedNodes`），
+  行为对，但同一件事写了两遍；已收敛成一个 `isOurMutation`，并补上「target 落在滑动轨道里」
+  这一面。改完复跑真悬停，位移与静止态都没变。
+- `settings.js` 的 `memorySettings` 读写都落地——第 9 条成立。
+- 注释与产物：`npm run build` 输出 76.3 KiB。
+

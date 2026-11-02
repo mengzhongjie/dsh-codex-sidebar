@@ -77,6 +77,17 @@ export function createTopbar({
   /** 造铃铛节点并接上事件。 */
   function createBell() {
     const button = createIconButton(getLabels().toggleDateView, BELL_SVG)
+
+    // 拦截指针与鼠标按下/抬起事件：铃铛挂在宿主工作区行（sectionHeader）中，
+    // 宿主行自身绑定了折叠/展开事件，不阻止冒泡会导致每次点铃铛时工作区整组被折叠或展开。
+    const stopBubble = event => {
+      event.stopPropagation()
+    }
+    button.addEventListener('pointerdown', stopBubble)
+    button.addEventListener('mousedown', stopBubble)
+    button.addEventListener('pointerup', stopBubble)
+    button.addEventListener('mouseup', stopBubble)
+
     button.addEventListener('click', event => {
       event.preventDefault()
       event.stopPropagation()

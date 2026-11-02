@@ -172,9 +172,37 @@ export function createDateView({ hostData, viewStore, locale, refreshBell, prepa
   /**
    * 标题滑动的运行态：一个标题只留一条动画。
    *
-   * 用 WeakMap 而不是往节点上挂属性：宿主会重建座位，节点换了旧状态自然回收。
+   * 用 WeakMap 记录每个标题的动画或排队状态，同时用 activeTitles 记录活跃节点，
+   * 退出日期视图或卸载时能干净地还原所有滑动中的标题。
    */
   const marquees = new WeakMap()
+  const activeTitles = new Set()
+
+  /** 彻底还原并清理某个标题节点的横向滑动状态。 */
+  function cleanupTitleMarquee(title) {
+    if (title === null || title === undefined) return
+    const state = marquees.get(title)
+    if (state === undefined) return
+    marquees.delete(title)
+    activeTitles.delete(title)
+    if (state.pending) {
+      if (state.frame1) cancelAnimationFrame(state.frame1)
+      if (state.frame2) cancelAnimationFrame(state.frame2)
+    } else if (state.frame) {
+      cancelAnimationFrame(state.frame)
+    }
+    const track = state.track
+    if (track && track.parentNode === title) {
+      while (track.firstChild !== null) title.insertBefore(track.firstChild, track)
+      track.remove()
+    }
+    // 兜底清理可能遗留的任何 track 节点（防止嵌套残留）
+    for (const staleTrack of title.querySelectorAll('.codex-sidebar-marquee-track')) {
+      while (staleTrack.firstChild !== null) title.insertBefore(staleTrack.firstChild, staleTrack)
+      staleTrack.remove()
+    }
+    title.classList.remove(MARQUEE_CLASS)
+  }
 
   /**
    * 悬停到行上：窗口固定（圆点之后到行尾），标题文字在这个窗口里向左挪。
@@ -189,65 +217,68 @@ export function createDateView({ hostData, viewStore, locale, refreshBell, prepa
     const title = titleNodeOf(row)
     if (title === null) return
     if (marquees.has(title)) return
-    // 先占位再等帧：一次悬停会连着触发好几个 mouseover（行里每个子元素各一次），
-    // 只在帧回调里判重会让它们全部排进来，最后套出好几层轨道。
-    marquees.set(title, null)
-    requestAnimationFrame(() => requestAnimationFrame(() => {
-      // 悬停期间行可能被重建，节点掉了就放弃。
-      if (!title.isConnected) {
-        marquees.delete(title)
-        return
-      }
-      title.classList.add(MARQUEE_CLASS)
-      const track = document.createElement('span')
-      track.className = 'codex-sidebar-marquee-track'
-      track.setAttribute(OWN_ATTR, '')
-      while (title.firstChild !== null) track.appendChild(title.firstChild)
-      title.appendChild(track)
-      const windowWidth = title.clientWidth - MARQUEE_TAIL_ROOM
-      const distance = track.getBoundingClientRect().width - windowWidth
-      if (distance <= 4) {
-        // 放得下就不动：把节点还回去，别留一层没用的包装。
-        while (track.firstChild !== null) title.insertBefore(track.firstChild, track)
-        track.remove()
-        title.classList.remove(MARQUEE_CLASS)
-        marquees.delete(title)
-        return
-      }
-      // 慢起步：位移越大走得越久，最长 3.2s；短距离也不低于 1.1s，否则像闪一下。
-      const duration = Math.min(3200, Math.max(1100, (distance / 55) * 1000))
-      const state = { frame: 0, start: 0, track }
-      marquees.set(title, state)
-      const step = now => {
-        if (state.start === 0) state.start = now
-        const progress = Math.min(1, (now - state.start) / duration)
-        // easeInOutSine：两头都慢，起步不会「嗖」一下冲出去。
-        const eased = -(Math.cos(Math.PI * progress) - 1) / 2
-        track.style.transform = `translateX(${(-distance * eased).toFixed(2)}px)`
-        if (progress < 1) state.frame = requestAnimationFrame(step)
-      }
-      state.frame = requestAnimationFrame(step)
-    }))
+    // 生成本次排队的唯一凭证：鼠标快速扫过列表时，若在两帧延迟内已经移出，
+    // 回调能依据凭证立即终止，绝不在鼠标离开后错误启动动画导致文字永久偏位。
+    const token = Symbol('marquee')
+    const queueState = { token, pending: true, frame1: 0, frame2: 0, track: null }
+    marquees.set(title, queueState)
+    activeTitles.add(title)
+
+    queueState.frame1 = requestAnimationFrame(() => {
+      queueState.frame2 = requestAnimationFrame(() => {
+        const current = marquees.get(title)
+        // 关键防御：若在排队等待期间已触发 mouseout（状态被清除或替换），立即退出
+        if (!current || current.token !== token) return
+        if (!title.isConnected) {
+          marquees.delete(title)
+          activeTitles.delete(title)
+          return
+        }
+        // 先清理可能存在的旧 track（防止异常嵌套）
+        for (const staleTrack of title.querySelectorAll('.codex-sidebar-marquee-track')) {
+          while (staleTrack.firstChild !== null) title.insertBefore(staleTrack.firstChild, staleTrack)
+          staleTrack.remove()
+        }
+        title.classList.add(MARQUEE_CLASS)
+        const track = document.createElement('span')
+        track.className = 'codex-sidebar-marquee-track'
+        track.setAttribute(OWN_ATTR, '')
+        while (title.firstChild !== null) track.appendChild(title.firstChild)
+        title.appendChild(track)
+        const windowWidth = title.clientWidth - MARQUEE_TAIL_ROOM
+        const distance = track.getBoundingClientRect().width - windowWidth
+        if (distance <= 4) {
+          // 放得下就不动：把节点还回去，别留一层没用的包装。
+          while (track.firstChild !== null) title.insertBefore(track.firstChild, track)
+          track.remove()
+          title.classList.remove(MARQUEE_CLASS)
+          marquees.delete(title)
+          activeTitles.delete(title)
+          return
+        }
+        // 慢起步：位移越大走得越久，最长 3.2s；短距离也不低于 1.1s，否则像闪一下。
+        const duration = Math.min(3200, Math.max(1100, (distance / 55) * 1000))
+        const animState = { token, pending: false, frame: 0, start: 0, track }
+        marquees.set(title, animState)
+        const step = now => {
+          if (marquees.get(title) !== animState) return
+          if (animState.start === 0) animState.start = now
+          const progress = Math.min(1, (now - animState.start) / duration)
+          // easeInOutSine：两头都慢，起步不会「嗖」一下冲出去。
+          const eased = -(Math.cos(Math.PI * progress) - 1) / 2
+          track.style.transform = `translateX(${(-distance * eased).toFixed(2)}px)`
+          if (progress < 1) animState.frame = requestAnimationFrame(step)
+        }
+        animState.frame = requestAnimationFrame(step)
+      })
+    })
   }
 
   /** 离开行：停掉动画，把文字从轨道里搬回标题，去掉包装与裁剪标记。 */
   function stopMarquee(row) {
     const title = titleNodeOf(row)
     if (title === null) return
-    const state = marquees.get(title)
-    if (state !== undefined) {
-      marquees.delete(title)
-      if (state !== null) {
-      cancelAnimationFrame(state.frame)
-      const track = state.track
-      // 宿主要是已经重渲过，轨道可能不在文档里，搬不回去就跳过。
-      if (track.parentNode === title) {
-        while (track.firstChild !== null) title.insertBefore(track.firstChild, track)
-        track.remove()
-      }
-      }
-    }
-    title.classList.remove(MARQUEE_CLASS)
+    cleanupTitleMarquee(title)
   }
 
   /** 悬停事件交给 document 代理：座位会被宿主重建，逐个绑定留不住。 */
@@ -272,8 +303,17 @@ export function createDateView({ hostData, viewStore, locale, refreshBell, prepa
   document.addEventListener('mouseover', onPointerOver, true)
   document.addEventListener('mouseout', onPointerOut, true)
 
-  /** 卸载时撤掉悬停代理（entry 的 effect 会调用）。 */
+  /** 停止并还原所有标题的横向滑动动画与 DOM 包装。 */
+  function stopAllMarquees() {
+    for (const title of [...activeTitles]) {
+      cleanupTitleMarquee(title)
+    }
+    activeTitles.clear()
+  }
+
+  /** 卸载时撤掉悬停代理与所有滑动动画（entry 的 effect 会调用）。 */
   function dispose() {
+    stopAllMarquees()
     document.removeEventListener('mouseover', onPointerOver, true)
     document.removeEventListener('mouseout', onPointerOut, true)
   }
@@ -287,6 +327,8 @@ export function createDateView({ hostData, viewStore, locale, refreshBell, prepa
   /** 把座位按段落排好，插标题，写回列表。 */
   function arrange() {
     if (!active || applying) return
+    // 若用户在宿主中切换到了归档筛选视图，不混排归档会话
+    if (viewStore.archivedFilter() !== 'default') return
     const container = findFlatList(findSidebar())
     if (container === null) return
 
@@ -313,7 +355,11 @@ export function createDateView({ hostData, viewStore, locale, refreshBell, prepa
         }
         const state = sessions.byId?.[sessionId]
         const updatedAt = state?.updatedAt
-        const time = typeof updatedAt === 'number' ? updatedAt : 0
+        const createdAt = state?.createdAt
+        // 优先使用更新时间；会话新建尚无更新时间时回退使用创建时间；快照未同步时以当前时间计，保证新会话始终排在「优先级/今天」最前
+        const time = typeof updatedAt === 'number' && updatedAt > 0
+          ? updatedAt
+          : (typeof createdAt === 'number' && createdAt > 0 ? createdAt : now)
         const running = state?.running === true
         // 正在运行的会话算作今天：它的更新时间可能很久之前，但用户现在在看它。
         const bucket = running ? { text: copy.today, rank: 0 } : bucketOf(time, now, copy)
@@ -378,6 +424,19 @@ export function createDateView({ hostData, viewStore, locale, refreshBell, prepa
       for (const node of nodes) {
         if (node.getAttribute?.(OWN_ATTR) !== null) headers.add(node)
       }
+      // 清理上一轮存在但本轮不再需要的旧段落标题（例如更早段落会话被清空），避免在 DOM 产生永久孤儿标题
+      for (const [, header] of spareHeaders) {
+        if (!headers.has(header)) {
+          header.remove()
+        }
+      }
+      // 定期剔除已经不在文档中的断开连接节点，防止长期运行内存泄漏
+      for (const chip of chips) {
+        if (!chip.isConnected) chips.delete(chip)
+      }
+      for (const preview of previews) {
+        if (!preview.isConnected) previews.delete(preview)
+      }
       if (inOrder) return
 
       // 8) 顺序不对才动 DOM：appendChild 对已有节点等价于移动，按顺序 append 一遍即可，
@@ -410,8 +469,9 @@ export function createDateView({ hostData, viewStore, locale, refreshBell, prepa
     // 它读到的第一个信号决定这一趟是让位还是抢回去。
     document.body.setAttribute(DATE_MODE_ATTR, '')
     if (!viewStore.flatten()) {
-      // 拿不到 store：把准备阶段与标记一起退掉。
+      // 拿不到 store：把准备阶段、备份与标记一起退掉。
       document.body.removeAttribute(DATE_MODE_ATTR)
+      previousGroupBy = null
       afterDisable?.()
       return
     }
@@ -426,6 +486,8 @@ export function createDateView({ hostData, viewStore, locale, refreshBell, prepa
     if (!active) return
     active = false
     document.body.removeAttribute(DATE_MODE_ATTR)
+    // 停止并清理所有正在跑的标题横向滑动，还原文字节点
+    stopAllMarquees()
     for (const header of headers) header.remove()
     headers.clear()
     stripChips()

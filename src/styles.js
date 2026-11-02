@@ -105,6 +105,7 @@ body[data-codex-sidebar] :is(dialog, [role="dialog"]) {
   width: 5px;
   height: 5px;
   border-radius: 50%;
+  /* 宿主语义绿色 token：有正在运行的会话时高亮指示，回退到标准绿色 */
   background: var(--dsw-alias-state-success-primary, #35c76a);
   box-shadow: 0 0 0 2px var(--dsw-alias-bg-layer-1, light-dark(#fff, #1b1b1e));
 }
@@ -237,11 +238,14 @@ body[data-codex-sidebar] :is(dialog, [role="dialog"]) {
  * 滑动轨道：包住标题文字，只平移这一层。
  * 标题自身不动，所以裁剪窗始终停在原位；不给标题加 transform 也不滚 scrollLeft，
  * 行上就不会出现横向滚动条。
+ * 设置 pointer-events: none 与 user-select: none，确保鼠标点击与选择完全穿透给会话行。
  */
 .codex-sidebar-marquee-track {
   display: inline-block;
   white-space: nowrap;
   will-change: transform;
+  pointer-events: none;
+  user-select: none;
 }
 
 /*
