@@ -1,6 +1,7 @@
 # 交接：dsh-codex-sidebar
 
-> 最近更新：2026-11-02（深入可用性与稳定性复核定稿，版本 0.2.0；高频切换、长短标题滑动、退出还原全绿）。
+> 最近更新：2026-11-03（铃铛按下态配色改为 DeepSeek 品牌蓝 `#4D6BFE`，双 profile 探针实测）。
+> 此前 2026-11-02：深入可用性与稳定性复核定稿，版本 0.2.0；高频切换、长短标题滑动、退出还原全绿。
 
 ## 目标与验收标准
 
@@ -27,7 +28,12 @@
   日期铃铛（同一功能，不重复实现），按下态读主题的 `aria-pressed` —— 完成并实测；
 - **缩放改成「窗口级优先 + 页面 CSS 兜底 + body 浮层补偿」**：窗口级证实不可用（见决定 10），
   页面 CSS 下 `dsh-better-sidebar` 的面板会压住输入框、弹层字小一圈，用 `src/portal-fit.js` 修掉 —— 完成并实测；
-- README、原生日期视图截图、官方设置页截图、主题让位截图 —— 完成。
+- README、原生日期视图截图、官方设置页截图、主题让位截图 —— 完成；
+- **铃铛按下态配色由琥珀改为 DeepSeek 品牌蓝 `#4D6BFE`**（浅/深色同一档；`--codex-sidebar-accent`
+  保留为外部覆盖口）—— 完成并实测：`codexprobe`（原生宿主）与 `desktopmirror`（桌面同款 bundle）
+  探针在 `aria-pressed=true` 时读到 computed color `rgb(77, 107, 254)`；改前 `rgb(169, 114, 15)`（琥珀）。
+  对照截图在 `.debug/`（本地、不入库）：`bell-before-sidebar.png` / `bell-after-sidebar.png` /
+  `bell-after-dark-sidebar.png`。
 
 ## 关键决定与原因
 

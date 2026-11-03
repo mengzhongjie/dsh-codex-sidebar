@@ -56,9 +56,13 @@ const CSS = `
   outline-offset: 1px;
 }
 
-/* 日期视图开启时铃铛常亮：用琥珀色作唯一强调色，深浅色各取一档 */
+/*
+ * 消息视图开启时铃铛常亮：用 DeepSeek 品牌蓝 #4D6BFE 作唯一强调色，深浅色同一档
+ * （品牌蓝在浅色与深色底上都够清楚，不再像早先的琥珀色那样分浅深两档；
+ *  --codex-sidebar-accent 仍保留为外部覆盖口，想换别色时只改这一个变量）。
+ */
 .codex-sidebar-icon-button[aria-pressed="true"] {
-  color: var(--codex-sidebar-accent, light-dark(#a9720f, #f0b429));
+  color: var(--codex-sidebar-accent, #4d6bfe);
 }
 
 /* 有会话在跑时亮一个点，不写数字 */

@@ -72,6 +72,7 @@ env -u all_proxy -u ALL_PROXY -u http_proxy -u HTTP_PROXY -u https_proxy -u HTTP
 | 只有按下铃铛才进入日期视图；默认是工作区视图 | 已实现（默认 dateViewEnabled=false） |
 | 运行中的会话排在今天最前 | 已实现 |
 | 铃铛只亮「有活跃会话」的小点，不显示条数 | 已实现 |
+| 铃铛按下态配色 = DeepSeek 品牌蓝 `#4D6BFE`（浅/深色同档） | 已实现、探针实测（codexprobe 与 desktopmirror；`--codex-sidebar-accent` 可覆盖） |
 | 未分组会话、被屏蔽工作区的会话不进日期列表（只隐藏不删） | 已实现 |
 | 设置进官方设置页（含不进入日期视图的工作区、整体缩放档位+自定义） | **已取消**（2026-11-02 决策：设置页、齿轮与缩放整份去掉） |
 | 跟随宿主语言（中文/英文） | 已实现（createLocale，热切换已验证） |
