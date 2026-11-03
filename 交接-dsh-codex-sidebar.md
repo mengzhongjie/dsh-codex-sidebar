@@ -416,5 +416,11 @@ esbuild 报 `src/styles.js:416:1: ERROR: Unterminated string literal`；补回�
 - **发布元数据**：`package.json` version 0.3.1、`private` 去掉、补 `repository` / `bugs` / `homepage`；
   新增 `LICENSE`（MIT, 2026 mengzhongjie）；README 安装段改成 `dsh plugin --profile <profile> add github:mengzhongjie/dsh-codex-sidebar`，
   并说明桌面 App 自带 pnpm 的路径与垫片写法。
-- **待办**：仓库转 public、改 description 与 topics、用 GitHub 直装再验一次、提 registry PR。
+- **已完成（同日）**：仓库转 public（MIT、topics: dsh-plugin / dsh / deepseek-harness / sidebar / ui、description 改成消息视图的说法）；
+  `dsh plugin --profile ghinstall add github:mengzhongjie/dsh-codex-sidebar` 从 GitHub 实装并实测通过
+  （自动写入 bundles=[base, web-app, dsh-codex-sidebar]，控制台一次 `[codex-sidebar] applied (en, host en)`，
+  铃铛 aria-label="Message view"、点击后 6 段标题 [Priority, Yesterday, Sunday, Saturday, Friday, Earlier]、
+  可见 58 行、工作区行 0，再点还原 10 个工作区行）；补 `assets/icon-180.png` 与 `screenshots.json`；
+  向 awesome-dsh-plugin 提 PR **#11641**（条目 `data/plugins/mengzhongjie__dsh-codex-sidebar.yml`，category ui，带图标）。
+  该仓库 CI 的 gate 会跑 dsh.bundle 检查、仓库年龄、awesome-lint 与站点构建。
 

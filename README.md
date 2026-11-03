@@ -108,6 +108,9 @@ probe-two-envs.mjs（两个隔离 profile 对照：无主题 / 带主题）、pr
 
 ## 更新记录
 
+- **2026-11-03 提交插件市场**：向 awesome-dsh-plugin 提了 PR #11641，条目是
+  `data/plugins/mengzhongjie__dsh-codex-sidebar.yml`（category: ui，带 180px 图标）；仓库同时补了
+  `assets/icon-180.png`（由 assets/icon.svg 渲染）与 `screenshots.json`（1 张截图，供市场详情页展示）。
 - **2026-11-03 0.3.1 收录前整理**：仓库转为公开、补 MIT 许可；安装说明改成
   `dsh plugin --profile <profile> add github:mengzhongjie/dsh-codex-sidebar`（装完自动登记 bundle），
   `scripts/install.mjs` 只负责本地目录安装，并顺手清掉旧版写在 `cordis.patch.yml` 里的重复 insert；
