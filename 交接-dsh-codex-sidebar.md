@@ -105,7 +105,7 @@
 `.debug/test-locale-live.mjs`：16/16 通过（晚就绪的服务、订阅式服务快照变化、绑定后跟随、
 `dispose` 后停止轮询并退订）。
 
-截图：`docs/screenshot-date-view.png`、`docs/screenshot-settings.png`、`docs/screenshot-theme-notice.png`。
+截图：`docs/screenshot-date-view.png`（设置页时期的 screenshot-settings.png / screenshot-theme-notice.png 已随设置页移除删掉）。
 
 ## 未验证 / 限制
 
@@ -155,7 +155,7 @@
 ## 2026-11-02 又一轮：把主题的日期布局整个删掉（本插件改为独占侧栏）
 
 - 方向（用户 18:0x 三条回答）：不再和主题抢同一个铃铛 —— 直接把 claude-style 的「日期布局」特性删掉，没有插件就不该有那颗小铃铛。
-- 已做：主题仓库 `/Users/apple/Desktop/SuperCode/dsh-claude-style` 删 `features/date-groups/` 全目录、`features/settings/settings-tab-date-layout.ts`、`active-shelf` 里的铃铛、`prefs.ts` 的两个偏好项、`workspace-view.ts` 与 `active-first.ts` 里两处 `data-dsh-claude-date-groups` 守卫；`npm run build` 与 `npm run lint` 通过。
+- 已做：主题仓库 dsh-claude-style（本地克隆）删 `features/date-groups/` 全目录、`features/settings/settings-tab-date-layout.ts`、`active-shelf` 里的铃铛、`prefs.ts` 的两个偏好项、`workspace-view.ts` 与 `active-first.ts` 里两处 `data-dsh-claude-date-groups` 守卫；`npm run build` 与 `npm run lint` 通过。
 - 验证环境：两个与生产隔离的 web profile（`.testhome/profiles/webclean` 无主题 / `webtheme` 带主题，端口 49830 / 49840），`DSH_HOME=$PWD/.testhome` 起服务，探针 `.debug/probe-two-envs.mjs`。
 - 结果：webtheme 里主题铃铛计数从 1 变 0，放大镜还在；我们的 `data-codex-sidebar-bell` 两边都在，5 个会话行 / 9 个工作区行正常。
 
@@ -192,7 +192,7 @@
 
 用户指令：主题的日期布局删掉；主题里不要那颗铃铛；我们的插件测试放到 web profile 与生产隔离；本地用我们自己的插件；给插件配一个图标。
 
-改了什么（主题仓库 `/Users/apple/Desktop/SuperCode/dsh-claude-style`，HEAD 原 `8e2f76a`）：
+改了什么（主题仓库 dsh-claude-style（本地克隆），HEAD 原 `8e2f76a`）：
 - 删 `packages/client/src/features/date-groups/`（5 个文件）与 `features/settings/settings-tab-date-layout.ts`；
   `settings.ts` 去掉 import 与注册，`settings.copy.json` 删四组文案，`contracts/src/prefs.ts` 删 `dateGroups`/`dateSkipWorkspaces`，
   `core/feature.ts` 的 `SettingsTabId` 去掉 `'date-layout'`，`core/scheduler.ts` 去掉 `dateGroups` 句柄，
@@ -395,3 +395,26 @@ esbuild 报 `src/styles.js:416:1: ERROR: Unterminated string literal`；补回�
 在 App 运行时重写仓库里的 `lib/client.js` 会触发宿主热重载踩空
 （`DesktopHostFatalError: cannot create effect on inactive context`，已踩过两次）。
 正确顺序：退出 App（Cmd+Q，关窗不退进程）→ `node scripts/build.mjs` → 重新打开 App。
+
+## 2026-11-03 收录到 awesome-dsh-plugin 前的整理（本轮）
+
+目标：按 https://github.com/awesome-dsh-plugin/awesome-dsh-plugin/blob/main/contributing.md
+自查隐私与可用性，修好后把插件登记进插件市场。决定与证据：
+
+- **隐私**：跟踪文件与 git 全历史扫过，无密钥；3 处本地绝对路径（README、本文件 :158、:195）已换成文字描述。
+  `docs/screenshot-date-view.png` 原来带着真实账号昵称、真实会话标题与工作区名，已用 `.debug/shoot-docs.mjs` 重拍成示例文案
+  （给行设 `data-demo-title` / `data-demo-preview` / `data-demo-chip`，再注入 `::after { content: attr(...) }` 覆盖显示；
+  直接改 textContent 会被插件每轮 arrange 重写，只有 data-* 属性能留下）。另外 3 张无引用截图已删。
+- **可用性（公开安装路径实测）**：`dsh plugin --profile pubtest add link:<本仓库>` 会自动把包写进
+  `dsh.profile.bundles`（dsh-app-boot 的 reconcileProfilePlugins），**不需要再手写 cordis.patch.yml 的 insert**。
+  pubtest profile（端口 49840）实测：控制台只有一次 `[codex-sidebar] applied (en)`；铃铛 aria-label="Message view"，
+  点击后 6 段标题 `[Priority, Yesterday, Sunday, Saturday, Friday, Earlier]`、可见 57 行，再点还原 10 个工作区行。
+- **发现并修掉的冗余**：`dsh --profile desktopmirror --dump-config` 里 `ui-codex-sidebar` 出现两次
+  （bundle 自带 patch + 旧 install.mjs 手写的 insert）→ `scripts/install.mjs` 改为只做
+  dependencies `link:` + `dsh.profile.bundles` + node_modules 符号链接三件事，并新增 `stripLegacyPatch()`
+  在装/卸时顺手删掉旧的 insert 段。
+- **发布元数据**：`package.json` version 0.3.1、`private` 去掉、补 `repository` / `bugs` / `homepage`；
+  新增 `LICENSE`（MIT, 2026 mengzhongjie）；README 安装段改成 `dsh plugin --profile <profile> add github:mengzhongjie/dsh-codex-sidebar`，
+  并说明桌面 App 自带 pnpm 的路径与垫片写法。
+- **待办**：仓库转 public、改 description 与 topics、用 GitHub 直装再验一次、提 registry PR。
+

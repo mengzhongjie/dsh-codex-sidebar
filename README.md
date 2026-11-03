@@ -22,24 +22,31 @@ DSH（DeepSeek Harness）左侧栏的「消息视图」插件：把侧栏里的�
 
 ## 安装
 
-插件目录就是本仓库，直接装到一个 DSH profile 里：
+需要 DSH ≥ 0.2.0，并把 `pnpm` 放进 PATH（桌面 App 的运行时自带一份，见本节末尾）。
+
+    dsh plugin --profile <profile> add github:mengzhongjie/dsh-codex-sidebar
+
+`dsh plugin` 装完依赖后会自动把包装进 profile 的 `dsh.profile.bundles`；插件自带的
+`cordis.patch.yml` 随 bundle 一起生效，不用手工改配置。装完重启宿主；桌面 App 的关窗
+不会退进程，要 **Cmd+Q** 退出后重开。桌面 App 自己管理的 profile（desktop）也走同一条命令。
+
+在仓库里改代码、要装本地目录时：
 
     node scripts/install.mjs --profile codexprobe                  # 装
     node scripts/install.mjs --profile codexprobe --uninstall      # 卸
 
-脚本做三件事（都可手工完成）：
+脚本把 `link:<本目录>` 写进 profile 的 dependencies、把包名加进 `dsh.profile.bundles`，
+并在 node_modules 下建符号链接；同样重启宿主生效。
 
-1. profile 的 cordis.patch.yml 里加一条 insert（id ui-codex-sidebar）；
-2. profile 的 package.json：dsh.profile.bundles 里加 dsh-codex-sidebar，dependencies 里加
-   "dsh-codex-sidebar": "link:<本目录>"；
-3. profile 的 node_modules/dsh-codex-sidebar 指向本目录的符号链接。
+桌面 App 的 pnpm 在 `~/.dsh/dsh-runtimes/dsh-primary-runtime/dependencies/pnpm/bin/pnpm.cjs`，
+包一层脚本放进 PATH 即可：
 
-装完重启宿主生效。桌面 App 关窗不会退进程，要用 **Cmd+Q** 退出后重开。
-桌面 App 自己管理的 profile（desktop）不能靠 dsh --profile desktop 启动，改了它的 bundles 之后同样只能 Cmd+Q 重开。
+    #!/bin/sh
+    exec node ~/.dsh/dsh-runtimes/dsh-primary-runtime/dependencies/pnpm/bin/pnpm.cjs "$@"
 
 ## 与 dsh-claude-style 的共存
 
-dsh-claude-style 原本也内置一份「铃铛 + 日期分组」。本机主题仓库（`/Users/apple/Desktop/SuperCode/dsh-claude-style`）
+dsh-claude-style 原本也内置一份「铃铛 + 日期分组」。主题仓库 dsh-claude-style（本地克隆）
 已把日期分组特性与顶行铃铛整份删掉，只保留自定义缩放，规则因此变成：
 
 | 事项 | 行为 |
@@ -47,7 +54,7 @@ dsh-claude-style 原本也内置一份「铃铛 + 日期分组」。本机主题
 | 列表 | 由本插件独占：主题看到 `body[data-codex-sidebar-date-view]` 就不再把它改回工作区分组（workspace-view 的 reconcile 与 healGrouping、active-first 的 reorder 三处都让位） |
 | 铃铛 | 只有本插件这一颗；主题的旧铃铛已不存在 |
 | 按下态 | 读本插件自己的状态（bellPressed） |
-| 让位条件 | 只有主题**仍然自带日期视图**时才 dormant：`.` + `` `body` 上有 `data-dsh-claude-date-groups` 或页面上还找得到主题铃铛（`src/coexist.js` 的 `themeHasDateView()`）。主题删掉日期视图后本插件照常接管 |
+| 让位条件 | 只有主题**仍然自带日期视图**时才让位：`body` 上有 `data-dsh-claude-date-groups`，或页面上还找得到主题铃铛（`src/coexist.js` 的 `themeHasDateView()`）。主题删掉日期视图后本插件照常接管 |
 
 ## 持久化
 
@@ -101,6 +108,11 @@ probe-two-envs.mjs（两个隔离 profile 对照：无主题 / 带主题）、pr
 
 ## 更新记录
 
+- **2026-11-03 0.3.1 收录前整理**：仓库转为公开、补 MIT 许可；安装说明改成
+  `dsh plugin --profile <profile> add github:mengzhongjie/dsh-codex-sidebar`（装完自动登记 bundle），
+  `scripts/install.mjs` 只负责本地目录安装，并顺手清掉旧版写在 `cordis.patch.yml` 里的重复 insert；
+  README 截图换成示例文案，不再出现真实会话名与账号名。
+
 - **2026-11-02 19:00 主题让位、本插件接管**：本机主题仓库删掉日期分组特性、设置页「日期布局」与顶行铃铛；
   主题侧补三处让位守卫（reconcile / healGrouping / active-first reorder），本插件把 `data-codex-sidebar-date-view`
   标记提到扁平化之前写，避免主题把扁平分组改回去。桌面 profile 换上本地构建的主题、装上本插件后，
@@ -121,3 +133,7 @@ probe-two-envs.mjs（两个隔离 profile 对照：无主题 / 带主题）、pr
   没装 superagent 的宿主里不再有 20 行会话悬在第一个日期标题前面（跳过条件加上「确实装了」的判据）。
 - **2026-11-02 悬停抖动修复**：标题节点复用 + 只比较自有节点顺序 + 忽略自有变更的 MutationObserver，
   抖动前约 1500 次/秒的 DOM 变动降到 0（有主题环境 1 次）。
+
+## 许可
+
+MIT，见 [LICENSE](LICENSE)。
