@@ -424,3 +424,10 @@ esbuild 报 `src/styles.js:416:1: ERROR: Unterminated string literal`；补回�
   向 awesome-dsh-plugin 提 PR **#11641**（条目 `data/plugins/mengzhongjie__dsh-codex-sidebar.yml`，category ui，带图标）。
   该仓库 CI 的 gate 会跑 dsh.bundle 检查、仓库年龄、awesome-lint 与站点构建。
 
+### 结果（2026-11-03 17:18）
+PR https://github.com/awesome-dsh-plugin/awesome-dsh-plugin/pull/11641 的 `check` 全部 31 个步骤 success
+（含 dsh.bundle 检查、仓库年龄、READMEs match data/plugins、awesome-lint、Added-date / Capability-disclosure /
+Discussion-adoption / Entry-path tests、Build 站点构建），mergeable=MERGEABLE，暂无 review 与标签。
+剩的是维护者合并：合并后条目会出现在仓库生成的 README / 站点上。之后没有本侧动作；
+若被要求改描述或补截图，改 `data/plugins/mengzhongjie__dsh-codex-sidebar.yml` 再推同一分支即可。
+
