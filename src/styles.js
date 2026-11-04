@@ -92,6 +92,9 @@ const CSS = `
   color: var(--dsw-alias-label-primary, inherit);
   opacity: 0.55;
   user-select: none;
+  /* 段落标题不许把列表撑宽：宽出容器一点就会让宿主长出横向滚动条。 */
+  box-sizing: border-box;
+  max-width: 100%;
 }
 
 /* 日期视图下行内的工作区标签：扁平后没有分组标题，靠它回忆归属 */
@@ -165,6 +168,7 @@ const CSS = `
   flex: 0 0 100%;
   box-sizing: border-box;
   min-width: 0;
+  max-width: 100%;
   padding-left: 20px;
   font-size: 12px;
   line-height: 1.45;

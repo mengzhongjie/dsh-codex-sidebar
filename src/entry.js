@@ -21,6 +21,7 @@ import { createLocale } from './locale.js'
 import { themeDateTrigger, themeHasDateView } from './coexist.js'
 import { createViewStore } from './view-store.js'
 import { createDateView } from './date-view.js'
+import { createNoHScroll } from './no-hscroll.js'
 import { createSuperagentBridge } from './superagent.js'
 import { createTopbar } from './topbar.js'
 import { mountStyles } from './styles.js'
@@ -99,6 +100,12 @@ function applyUnsafe(ctx) {
     locale: () => localeState.language(),
     refreshBell: () => topbar?.refreshBell()
   })
+
+  /**
+   * 横向滚动锁：消息视图下把侧栏的左右滑动关掉（详情见 no-hscroll.js）。
+   * 与日期视图同生命期：视图开着就锁，关掉就还原。
+   */
+  const noHScroll = createNoHScroll()
 
   topbar = createTopbar({
     dateView,
@@ -196,6 +203,10 @@ function applyUnsafe(ctx) {
       topbar.mount()
       reconcile()
       dateView.schedule()
+      // 消息视图开着时锁死横向滚动；关掉时还原宿主原本的 overflow。
+      // 放在重排之后：重排会搬座位、插标题，宽度要以搬完后的结果为准。
+      if (dateView.isActive()) noHScroll.apply()
+      else noHScroll.restore()
     })
   }
 
@@ -277,6 +288,7 @@ function applyUnsafe(ctx) {
     })
     // 先撤视图再撤顶行：视图的清理会用到顶行挂的落座信息。
     quietly('撤销消息视图', () => dateView.disable())
+    quietly('解除横向滚动锁', () => noHScroll.restore())
     quietly('卸下顶行按钮', () => topbar.unmount())
     quietly('撤掉标记', () => {
       document.body.removeAttribute(BODY_ATTR)

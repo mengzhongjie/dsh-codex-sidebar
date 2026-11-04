@@ -437,7 +437,24 @@ Discussion-adoption / Entry-path tests、Build 站点构建），mergeable=MERGE
 剩的是维护者合并：合并后条目会出现在仓库生成的 README / 站点上。之后没有本侧动作；
 若被要求改描述或补截图，改 `data/plugins/mengzhongjie__dsh-codex-sidebar.yml` 再推同一分支即可。
 
-\n## 2026-11-04 真机没修的根因 + 启动双视图（本轮）\n\n用户两条反馈（15:58）：「还是没有修复成功」（预览越出灰栏）、「启动的时候闹钟按着会发生工作区和消息视图同时存在」。\n\n### 1. 为什么真机没修上（预览越界那条）\n\n- 上一轮把修好的 bundle 暂存到 ，用  等 App 退出后替换仓库里的\n  。日志  里只有反复的  → ，\n  da39a3ee5e6b4b0d3255bfef95601890afd80709  - /        0       0       0 的输出全是空——launchd 的 PATH 极简，脚本里没写绝对路径，命令全部失败；\n  仓库  一直是旧的 61502 B（sha c04e1571…），所以界面当然没变。\n- 更深一层：仓库在 ，macOS TCC 会拒绝 launchd 进程读写桌面（实测\n  ）。**只要发布目录在桌面，后台替换就不可能成功。**\n- 处置：桌面 profile 的  依赖改成 \n  （备份 ），并把修好的构建发布到该目录；\n  新增 （源仓库：/Users/apple/Desktop/SuperCode/Project/dsh-codex-messagesidebar
+
+## 2026-11-04 关掉列表横向滚动（本轮）
+
+用户反馈（16:51，附图）：消息视图列表底部有一条灰色横向滚动条压在「昨天」标题上，「把这里的左右滑动的功能删掉，我们这里固定住」。
+
+- **根因**：宿主的滚动容器是 `[data-slot="sidebar"] div.bhn1Oq_list`（`overflow-x: auto; overflow-y: auto`）。
+  我们的行有 `padding-left` 与 chip 等宽度，内容超宽时就渲染出横向滚动条，视觉上正好盖住段落标题。
+  headless 下量不到横向溢出（sw=cw），所以做法是防御性锁定而不是「消灭某个具体元素」。
+- **实现**：新增 `src/no-hscroll.js`，`createNoHScroll()` 从 `[class*="flatList"]` 沿祖先链（到 `[data-slot="sidebar"]` 后再带上侧栏祖先）
+  收集 computed `overflow-x` 为 auto/scroll 的节点，写内联 `overflow-x: hidden`（纵向不可滚时写 `clip`），原值存 Map 供还原。
+  `src/entry.js` 在 `schedule()` 的 rAF 里按 `dateView.isActive()` 调 `apply()` / `restore()`，插件卸载时还原。
+  `src/styles.js` 给 `.codex-sidebar-date-header` 补 `box-sizing: border-box` / `max-width: 100%`，给 `.codex-sidebar-preview` 补 `max-width: 100%`。
+- **证据（Playwright headless 1440×900，两个 profile）**：codexprobe 与 desktopmirror（主题 + better-sidebar）都是
+  `bhn1Oq_list ox=hidden inlineOx="hidden"`，其余祖先保持 visible，纵向滚动 `ok=true after=200`，rows=65、headers=7。
+  点真铃铛（`.codex-sidebar-actions button`）退出后：`headers=0`、`groups=10`、页面内残留 `[style*=overflow-x]` 为 0。
+- **踩坑**：`[data-codex-sidebar-bell]` 命中的是 **body**（那是「铃铛已挂载」标记），真按钮在
+  `.codex-sidebar-actions > button`；用它点击等于给 body 派发 click，什么都不会发生。
+## 2026-11-04 真机没修的根因 + 启动双视图（本轮）\n\n用户两条反馈（15:58）：「还是没有修复成功」（预览越出灰栏）、「启动的时候闹钟按着会发生工作区和消息视图同时存在」。\n\n### 1. 为什么真机没修上（预览越界那条）\n\n- 上一轮把修好的 bundle 暂存到 ，用  等 App 退出后替换仓库里的\n  。日志  里只有反复的  → ，\n  da39a3ee5e6b4b0d3255bfef95601890afd80709  - /        0       0       0 的输出全是空——launchd 的 PATH 极简，脚本里没写绝对路径，命令全部失败；\n  仓库  一直是旧的 61502 B（sha c04e1571…），所以界面当然没变。\n- 更深一层：仓库在 ，macOS TCC 会拒绝 launchd 进程读写桌面（实测\n  ）。**只要发布目录在桌面，后台替换就不可能成功。**\n- 处置：桌面 profile 的  依赖改成 \n  （备份 ），并把修好的构建发布到该目录；\n  新增 （源仓库：/Users/apple/Desktop/SuperCode/Project/dsh-codex-messagesidebar
 发布到：/Users/apple/.dsh/plugins/dsh-codex-sidebar
   package.json -> /Users/apple/.dsh/plugins/dsh-codex-sidebar/package.json
   cordis.patch.yml -> /Users/apple/.dsh/plugins/dsh-codex-sidebar/cordis.patch.yml
