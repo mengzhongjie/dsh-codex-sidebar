@@ -141,6 +141,12 @@ function applyUnsafe(ctx) {
    * 只在「有我们的备份键」时才回滚，避免覆盖用户自己选的扁平分组。
    */
   function healLeftoverFlat() {
+    // 设置里日期视图是开着的：此刻的扁平列表就是「想要的状态」，不是崩溃残留。
+    // 早先无条件自愈会先把它改回工作区分组，随后 enable() 再切一次扁平；宿主若晚一步水合，
+    // 就把分组重新写回工作区，而 dateView.active 已经是 true，reconcile 不再重切 ——
+    // 结果就是「工作区视图 + 消息视图」同时出现（真机复现：flatList=0、groupSection=9、
+    // 我们的 3 个日期标题插在工作区分组里）。
+    if (readSettings().dateViewEnabled) return
     const leftover = viewStore.leftoverBackup()
     if (leftover === null) return
     if (viewStore.groupBy() === 'flat') {

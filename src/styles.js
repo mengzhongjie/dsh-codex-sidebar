@@ -155,9 +155,15 @@ const CSS = `
  * 第二行：这段对话最后说的话。
  * 与标题文字左对齐（图标槽 16px + 间隙 8px），最多两行，超出省略；
  * pointer-events: none 让它不抢走整行的点击与悬停。
+ *
+ * box-sizing: border-box 是必须的：宿主是 content-box，flex-basis: 100% 指的是内容宽，
+ * 再加 20px 左内缩，盒子就比行内容区宽 20px —— 文字与省略号会画到行尾外面、越过悬停底色
+ * 的圆角甚至侧栏边界（真机截图里的「字超过灰色栏」就是这个）。改成 border-box 后
+ * 100% 把内缩算在内，右边缘正好落在行内容区右边。
  */
 .codex-sidebar-preview {
   flex: 0 0 100%;
+  box-sizing: border-box;
   min-width: 0;
   padding-left: 20px;
   font-size: 12px;

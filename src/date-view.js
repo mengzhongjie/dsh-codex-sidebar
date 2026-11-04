@@ -112,6 +112,17 @@ export function createDateView({ hostData, viewStore, locale, refreshBell, prepa
   /** 合并多次触发的调度句柄。 */
   let frameHandle = 0
 
+  /**
+   * 本轮「宿主把分组改回工作区」后重新扁平化的次数。
+   *
+   * 宿主刚启动时会用自己的持久化值渲染，偶尔在我们的 enable() 之后又把分组写回去；
+   * 连续掰几次就能稳住。上限是为了防止宿主（或皮肤）死活不接受扁平时不间断地刷新帧。
+   */
+  let refoldAttempts = 0
+
+  /** 重新扁平化的重试上限（约 30 帧，够覆盖启动水合）。 */
+  const REFOLD_LIMIT = 30
+
   /** 是否处于日期视图。 */
   function isActive() {
     return active
@@ -355,8 +366,23 @@ export function createDateView({ hostData, viewStore, locale, refreshBell, prepa
     if (!active || applying) return
     // 若用户在宿主中切换到了归档筛选视图，不混排归档会话
     if (viewStore.archivedFilter() !== 'default') return
+    // 宿主可能在水合时把分组方式盖回工作区（它自己也持久化 groupBy，值比我们的设置晚到）。
+    // 这时 active 仍是 true，但列表已经分组；不重新扁平化就会把日期标题插进工作区分组，
+    // 于是两种视图同时存在。发现不一致就再掰一次，并等宿主渲染完再排。
+    if (viewStore.groupBy() !== 'flat') {
+      if (refoldAttempts < REFOLD_LIMIT) {
+        refoldAttempts += 1
+        viewStore.flatten()
+        schedule()
+      }
+      return
+    }
+    refoldAttempts = 0
     const container = findFlatList(findSidebar())
     if (container === null) return
+    // store 已经扁平、DOM 还没重渲染完：等宿主把分组结构换成扁平列表再排，
+    // 绝不在这一帧往分组视图里插标题。
+    if (container.querySelector('[class*="groupSection"]') !== null) return
 
     applying = true
     try {
