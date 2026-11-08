@@ -13,6 +13,7 @@
  * 模式在 reconcile() 里判定，设置变化、侧栏挂载、页面变动都会重新跑它。
  *
  * 缩放不属于本插件：整页缩放会与主题、better-sidebar 的浮层定位打架，2026-11-02 起整份移除。
+ * 但页面被**别人**缩放时（主题的 pageZoom），宿主的列表动画会算错位移，见 flip-zoom-fix.js。
  */
 import { PLUGIN_ID, LOG_PREFIX, BODY_ATTR, DATE_MODE_ATTR, OWN_ATTR, MARQUEE_CLASS } from './constants.js'
 import { readSettings, writeSettings, subscribeSettings } from './settings.js'
@@ -26,6 +27,7 @@ import { createSuperagentBridge } from './superagent.js'
 import { createTopbar } from './topbar.js'
 import { mountStyles } from './styles.js'
 import { findSidebar } from './sidebar-dom.js'
+import { createFlipZoomFix } from './flip-zoom-fix.js'
 
 export const name = PLUGIN_ID
 
@@ -66,6 +68,17 @@ function applyUnsafe(ctx) {
   } catch {
     // localStorage 不可用（隐私模式）时静默跳过
   }
+
+  /**
+   * 宿主列表动画的缩放补偿。
+   *
+   * 页面被主题缩放（pageZoom 115）时，宿主的 FLIP 用视觉 px 读位移、又把同一个数写进本地坐标系的
+   * translate，于是被缩放再放大一次：打开工作区时下面那组会先多窜 dy×(s−1) 再落回来。
+   * 这里在宿主动画那一刻把位移折回本地单位；s = 1 时整段等于没装。
+   */
+  const flipZoomFix = createFlipZoomFix()
+  flipZoomFix.start()
+  disposers.push(() => flipZoomFix.dispose())
 
   const hostData = createHostData(ctx)
   const viewStore = createViewStore(ctx)

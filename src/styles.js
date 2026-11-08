@@ -41,13 +41,19 @@ const CSS = `
   border: 0;
   border-radius: var(--dsw-radius-sm, 8px);
   background: transparent;
-  color: var(--dsw-alias-label-primary-dimmed, light-dark(rgb(97, 102, 107), rgb(160, 165, 172)));
+  /*
+   * 默认（工作区视图）用正文墨色，不用次级灰：
+   * 深色主题下就是白色，浅色主题下接近黑 —— 铃铛代表「当前排在哪种视图」，
+   * 未按下时应当和正文一样是「实的」，按下后换成品牌蓝才说明切到了消息视图。
+   * 这也是主题 PR #256 给它们自己那颗铃铛定的同一套语义。
+   */
+  color: var(--dsw-alias-label-primary, light-dark(rgb(15, 17, 21), rgb(236, 237, 240)));
   cursor: pointer;
   transition: color 120ms ease, background-color 120ms ease;
 }
 
+/* 悬停只加底色，不改颜色：颜色本身在表达状态，悬停不该把它盖掉。 */
 .codex-sidebar-icon-button:hover {
-  color: var(--dsw-alias-label-primary, light-dark(rgb(15, 17, 21), rgb(236, 237, 240)));
   background: var(--dsw-alias-interactive-bg-hover, color-mix(in srgb, currentColor 10%, transparent));
 }
 
@@ -62,7 +68,9 @@ const CSS = `
  *  --codex-sidebar-accent 仍保留为外部覆盖口，想换别色时只改这一个变量）。
  */
 .codex-sidebar-icon-button[aria-pressed="true"] {
+  /* 消息视图：品牌蓝 + 一层同色淡底（与主题 PR #256 的按下态同一种处理）。 */
   color: var(--codex-sidebar-accent, #4d6bfe);
+  background: color-mix(in srgb, var(--codex-sidebar-accent, #4d6bfe) 14%, transparent);
 }
 
 /* 有会话在跑时亮一个点，不写数字 */
@@ -141,6 +149,49 @@ const CSS = `
   height: auto !important;
   min-height: 32px !important;
   flex-wrap: wrap !important;
+}
+
+/*
+ * 有主题时，会话行提前按主题的紧凑尺寸摆好。
+ *
+ * 主题（dsh-claude-style）把行压成 28px / 标题 13px，但那些规则挂的是它自己打的标记
+ * [data-dsh-claude-part~=session-row]——标记是它的观察者在 React 提交之后才写上去的，
+ * 而宿主的 AnimatedRows 就在提交那一帧里读位置换算 FLIP 起点：读到的是宿主原本的
+ * 32px 行，之后主题把行压到 28px，于是「打开一个工作区，下面那组仍会往上弹一小段」
+ * （实测 3 行 × 4px = 12px，残余过冲 14%；主题 zoom 1.15 下 31%）。
+ * 这里按「页面上有主题」这个更早成立的判据提前把行压到同尺寸，宿主读到的就是最终高度。
+ *
+ * 三个 :not 是必要的：
+ *   - 主题自己的日期视图（data-dsh-claude-date-groups）里行是多行预览、height:auto，
+ *     压成固定高度会把预览裁掉；
+ *   - 本插件接管日期视图（data-codex-sidebar-date-view）时同理；
+ *   - 主题的紧凑排版（compact）本来就是 24px，另给一条规则，别把它顶成 28px。
+ */
+body[data-dsh-claude-style]:not([data-dsh-claude-date-groups]):not([data-codex-sidebar-date-view]):not([data-dsh-claude-sidebar-layout="compact"]) [data-slot="sidebar"] [data-row-key^="session:"] {
+  height: 28px;
+  min-height: 28px;
+}
+
+body[data-dsh-claude-style][data-dsh-claude-sidebar-layout="compact"]:not([data-dsh-claude-date-groups]):not([data-codex-sidebar-date-view]) [data-slot="sidebar"] [data-row-key^="session:"] {
+  height: 24px;
+  min-height: 24px;
+}
+
+/*
+ * dsh-superagent 自己的会话行（worker- / orchestrator-）：提前用样式藏掉。
+ *
+ * 那个插件是在行已经渲染出来之后才写行内 display:none（见它 client 的 hideOwn），
+ * 而宿主的 AnimatedRows 是在行插入的那一帧里读一次位置换算 FLIP 的起点：
+ * 读的时候这些行还算进列表高度，之后才被缩掉 —— 于是「打开一个工作区，
+ * 下面那组先多出几十像素再落回来」（实测过冲 50%~96%，纯宿主 0%）。
+ * 用静态样式先一步藏掉，宿主读到的就是最终高度，这段多余动画根本不会产生。
+ *
+ * 只在本插件加载时生效（body 上有 data-codex-sidebar）；用 :not() 让开主会话 ——
+ * 消息视图里主会话要露出来，由下面那条权重更高的规则负责显示。
+ */
+body[data-codex-sidebar] [data-row-key^="session:worker-"],
+body[data-codex-sidebar] [data-row-key^="session:orchestrator-"]:not(.codex-sidebar-main-session) {
+  display: none !important;
 }
 
 /*

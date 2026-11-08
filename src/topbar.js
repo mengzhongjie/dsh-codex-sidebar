@@ -74,6 +74,22 @@ export function createTopbar({
     }
   }
 
+  /**
+   * 稍后再刷一次按下态。
+   *
+   * 委派模式下，按下态来自主题那颗铃铛的 aria-pressed，而主题是 React 组件：
+   * trigger.click() 只是派发了事件，真正的 DOM 属性要等它下一次提交才更新。
+   * 在同一帧里 refreshBell() 读到的还是旧值（实测按下后图标仍是未按下色，
+   * 用户因此觉得「按钮没反应」）。所以点完再补两帧 + 一个短定时器，覆盖 React 的提交时机。
+   */
+  function refreshBellSoon() {
+    window.requestAnimationFrame(() => {
+      refreshBell()
+      window.requestAnimationFrame(refreshBell)
+    })
+    window.setTimeout(refreshBell, 90)
+  }
+
   /** 造铃铛节点并接上事件。 */
   function createBell() {
     const button = createIconButton(getLabels().toggleDateView, BELL_SVG)
@@ -94,7 +110,8 @@ export function createTopbar({
       // 有主题时把这次点击交给主题自己的铃铛：它才是当前真正在动的日期视图。
       if (typeof onBellClick === 'function' && onBellClick() === true) {
         // 主题的按钮可能被我们藏起来了（display:none），改完状态要重新读一次按下态。
-        refreshBell()
+        // 它的状态是异步提交的，所以要等下一帧再读，见 refreshBellSoon。
+        refreshBellSoon()
         return
       }
       dateView.toggle()
