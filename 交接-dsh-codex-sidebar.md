@@ -519,6 +519,21 @@ Discussion-adoption / Entry-path tests、Build 站点构建），mergeable=MERGE
 - 提交 `138d127`（flip-zoom 补偿）与 `fef9bad`（文档 + 版本号），已推 `main`。
 - **桌面 App 仍在跑 2026-11-07 10:22 起的老进程**，需用户 **Cmd+Q** 退出后重开才装载新 bundle。
 
+### desktop 的 superagent 依赖改成 link（2026-11-08 20:17）
+- 背景：`~/.dsh/profiles/desktop/node_modules/dsh-superagent` 早前已换成指向 fork 的符号链接（v0.2.2），
+  但 `package.json` 里还写着 `file:.../dsh-superagent-0.2.0.tgz`，两边不一致 —— 将来重装/校验可能把目录拉回 tgz 旧版。
+- 改法：`~/.dsh/profiles/desktop/package.json` 的 `dependencies["dsh-superagent"]` 由
+  `file:/Users/apple/Desktop/SuperCode/Project/dsh-superagent/dsh-superagent-fork/dsh-superagent-0.2.0.tgz`
+  改成 `link:/Users/apple/Desktop/SuperCode/Project/dsh-superagent/dsh-superagent-fork`（与同 profile 里
+  `dsh-codex-sidebar: link:...` 的写法一致）。备份：`~/.dsh/backups/desktop-superagent-link-20261108-201702/package.json`。
+- 同步：`~/.dsh/profiles/desktopmirror/package.json` 由 desktop 复制重建（name 改回 dsh-profile-desktopmirror）。
+- 验证（desktopmirror 49820，`.debug/probe-hide-sheet.js`）：`styleMounted=true`，`styleText` 是
+  「插件自建会话（worker- / orchestrator-）不占侧栏一行；第一帧布局就生效。」→ 确认经 link 装载到的是 v0.2.2 新构建。
+- 注意：镜像 profile 与真实 desktop 共用同一个 stateDir，桌面 App 在跑时它的 superagent 会报
+  `Lock file is already being held`（proper-lockfile），这是同 stateDir 双实例的预期行为，与本次改动无关。
+- 其余测试 profile（notheme / desknosuper / desktopminus / nobetter / nosuper / superagent）仍写 file:tgz，
+  它们的 node_modules 多为指向 desktop/node_modules 的链接，实际也吃 fork 构建；未逐个改。
+
 ### 待办
 - PR #254（会话行显示最近一段回复）被维护者 CLOSED（理由「方向与插件设计理念不契合」）；本插件自己的消息视图
   已经自带两行式预览，不受影响。
