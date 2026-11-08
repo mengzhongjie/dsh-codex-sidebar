@@ -1,6 +1,6 @@
 {
   "name": "dsh-codex-sidebar",
-  "version": "0.3.1",
+  "version": "0.3.2",
   "private": false,
   "description": "DSH 侧栏的消息视图：全部会话按优先级/昨天/星期X/更早分段，两行式会话行（标题 + 最新消息预览），顶行铃铛切换。",
   "type": "module",

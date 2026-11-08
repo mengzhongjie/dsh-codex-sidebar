@@ -86,6 +86,7 @@ dsh-claude-style 原本也内置一份「铃铛 + 日期分组」。主题仓库
 | src/locale.js | 中英文案与语言解析（订阅宿主 locale 服务） |
 | src/coexist.js | 主题检测、主题日期铃铛定位、`themeHasDateView()`（主题是否仍自带日期视图） |
 | src/styles.js | 注入的全部样式（全部走宿主 token，浅色/深色自适应） |
+| src/flip-zoom-fix.js | 页面被别人缩放时，把宿主列表动画的位移折算回本地单位（见更新记录 2026-11-08） |
 | src/constants.js | 常量：属性名、类名、存储键、默认设置 |
 
 ### 验证
@@ -106,10 +107,20 @@ probe-two-envs.mjs（两个隔离 profile 对照：无主题 / 带主题）、pr
 - 结果依赖宿主私有 DOM 契约（data-row-key、座位 span、flatList 容器），宿主大改版可能失效；
   选择器集中在 src/constants.js 与 src/sidebar-dom.js，方便一处改完。
 - 桌面 App 没有窗口级缩放的对外通道，页面缩放只能走 CSS；本插件已不提供缩放（那是主题的能力）。
+  但别的插件（例如主题的 pageZoom）缩放页面时，宿主的列表动画会算错位移，本插件用 `src/flip-zoom-fix.js` 补偿。
 - 若把主题还原成带日期视图的版本，本插件会重新让位：那时列表由主题的日期视图负责。
 
 ## 更新记录
 
+- **2026-11-08 展开工作区时下面那组不再弹一下**：宿主 AnimatedRows 的 FLIP 用 `getBoundingClientRect`
+  读**视觉像素**位移，又把同一个数写进**本地坐标系**的 `translate`，于是位移被页面缩放再放大一次
+  （主题 `pageZoom: 115` 时正好多 20px，量下来是 15% 的过冲）。新增 `src/flip-zoom-fix.js` 包一层
+  `Element.prototype.animate`，只对侧栏里带 `data-row-key` 的行把 `translate` 的 px 值按有效缩放除一下；
+  有效缩放取 body 的「视觉宽 ÷ 布局宽」（侧栏收起时也拿得到）。四环境复测：带主题不缩放 0、带主题 1.15 归零、
+  带主题且无 superagent 归零、纯宿主不受影响。
+  同一轮另修两处「测量后才变化的行高」：有主题时按主题的紧凑尺寸提前把会话行压到 28px（主题的标记要等它自己的
+  observer 才打上，宿主在提交那一帧量到的是 32px），以及把 dsh-superagent 的 `worker-` / `orchestrator-` 伪会话行
+  用静态 CSS 提前藏掉（它原来在宿主量完位置之后才写 `display:none`，导致下面那组拿到过大的位移）。
 - **2026-11-04 关掉横向滚动**：消息视图里列表容器（宿主 `div.bhn1Oq_list`）原本 `overflow-x: auto`，
   行内容一宽就冒出横向滚动条压在段落标题上；新增 `src/no-hscroll.js` 在消息视图期间沿祖先链把横向滚动锁成
   `hidden`（纵向仍可滚），退出时逐个还原；段落标题与预览补 `box-sizing: border-box` / `max-width: 100%`。
