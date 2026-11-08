@@ -463,3 +463,64 @@ Discussion-adoption / Entry-path tests、Build 站点构建），mergeable=MERGE
   assets -> /Users/apple/.dsh/plugins/dsh-codex-sidebar/assets
 完成：lib/client.js 61502 字节，sha256 c04e15717044462f98e168cc7bf8a34b9b043db19b4fafcf5a873a52fff3d3da
 桌面 profile 需把依赖链到该目录：dsh plugin --profile desktop add link:/Users/apple/.dsh/plugins/dsh-codex-sidebar）作为「仓库 → 发布目录」的唯一通道。\n  仓库仍是源码与构建的唯一来源，但**桌面 App 不再直接加载仓库**。\n\n### 2. 启动即开消息视图时，两种视图并存\n\n- 复现（.debug/run-boot.mjs + prep-boot-on.js + measure-boot.js，两个 web 宿主都命中）：\n  ，控制台出现\n  。\n- 根因链：\n  1.  启动时无条件自愈：看到 localStorage 里的分组备份 + store 已被宿主持久化成 flat，\n     就  并清掉备份。但这次 flat 是用户设置  的**正当状态**。\n  2. 紧接着  →  又切回 flat；宿主水合晚一步，把分组写回 workspace。\n  3. 此时  已是 true， 的  不成立，\n     再也不会重新扁平化； 于是把日期标题插进了工作区分组容器。\n- 修复：\n  -   增加前置判断： 为 true 时直接返回（不碰。\n  -   开头校验 ：不一致就重新  并等下一帧，\n    连续最多  帧（防死循环）；容器里仍有  时这一帧不插标题。\n  -   加 （上一轮的溢出修复，本轮才真正进构建）。\n- 验证（影子副本 /tmp/codexfix2 → 发布目录，Playwright headless 1440×900）：\n  - 启动即开：solo ；\n    theme（dsh-claude-style + better-sidebar）同样 ，无自愈日志。\n  - 启动关闭：solo ；theme 。\n  - 预览越界（.debug/measure-overflow.js）：solo 63 条预览全部 （行内），theme 34 条全部 ；\n    、（行 256）。\n  - 发布目录实测：codexprobe 指向  后启动即开 。\n- 提交：（只含 src，**lib 尚未提交**，\n  App 退出后才能安全重建仓库 lib 并补提交）。\n\n### 3. 本轮的真机流程\n\n- 桌面 App（pid 9920，14:04:44 启动）运行时替换仓库  会触发宿主热重载踩空（已两次），\n  所以本轮只改 profile 依赖与发布目录，**不动仓库 lib**。\n- 已装 （脚本 /tmp/dsh-reopen-after-quit.sh）：\n  用户 Cmd+Q 退出后约 1–2 秒自动 ，App 从发布目录加载新 bundle。\n  该 waiter 只跑   PID TTY           TIME CMD 与 ，不读写用户目录，避开 TCC。\n- 下次接手要看：App 重启后首屏是否仍是消息视图但**没有**工作区分组；预览是否还在灰栏内；\n  仓库  需要重建并提交； 仍按 link 仓库工作（装到新 profile 时用），\n  桌面 profile 已是 link 发布目录。\n
+## 2026-11-08 展开工作区时的「弹一下」（本轮）
+
+用户反馈（m06464）：打开一个工作区时，下面那组会先往上一跳再落回来，问是谁的问题。
+
+### 结论：三个来源叠在一起，已全部修掉
+
+1. **dsh-superagent 的行内 `display:none`（主因，量到 50%~96%）**
+   它在 `installMainSessionEntry` 的 `hideOwn()` 里用行内样式藏 `worker-` / `orchestrator-` 会话行与同名伪工作区，
+   并用 `MutationObserver(document.body, {childList:true, subtree:true})` 盯着整棵子树。宿主每次展开/折叠都重建行，
+   React 先把行插进来（列表变高）→ 宿主 AnimatedRows 读到这个「还没被藏」的位置（实测行进 266px、落定 132px，正好 2 倍）
+   → 之后 superagent 的 observer 才写 `display:none` 把行缩掉 → 宿主拿到的位移比真实位移大一截。
+   **修法**：`src/styles.js` 用静态 CSS 提前藏掉 ——
+   `body[data-codex-sidebar] [data-row-key^="session:worker-"], body[data-codex-sidebar] [data-row-key^="session:orchestrator-"]:not(.codex-sidebar-main-session){display:none!important}`。
+   用 `:not()` 让开主会话（主会话靠 `.codex-sidebar-main-session` 的 `!important` 规则显示）。
+
+2. **主题的紧凑行高在测量之后才生效（残余 14%）**
+   主题把 `height:28px` 挂在自己打的 `[data-dsh-claude-part~=session-row]` 上，而那个标记是它自己的 observer
+   在 React 提交**之后**才写的。宿主在提交那一帧量到 32px 的行，之后主题压到 28px —— 每行差 4px × 3 行 = 12px（实测）。
+   **修法**：`src/styles.js` 在「有主题、但两个日期视图都没开、也不是 compact 布局」时提前按主题尺寸压行：
+   `body[data-dsh-claude-style]:not([data-dsh-claude-date-groups]):not([data-codex-sidebar-date-view]):not([data-dsh-claude-sidebar-layout="compact"]) [data-slot="sidebar"] [data-row-key^="session:"]{height:28px;min-height:28px}`，
+   compact 布局另有一条 24px 版本。
+
+3. **页面被缩放时宿主把视觉位移当本地位移用（残余 15%，只看得到在 `pageZoom: 115` 上）**
+   宿主 AnimatedRows 的 FLIP 用 `getBoundingClientRect` 读**视觉 px**，又把同一个数写进**本地坐标系**的 `translate`，
+   于是位移被缩放再放大一次：多出 dy×(s−1)。s=1.15、dy=133.31 时正好 20px。
+   **修法**：新增 `src/flip-zoom-fix.js`，包一层 `Element.prototype.animate`，只对带 `data-row-key` 的行
+   （`session:` / `workspace:` / `overflow:` 前缀，或挂在侧栏里）把 `translate` 的 px 值 ÷ 有效缩放。
+   有效缩放取 **body 的「视觉宽 ÷ 布局宽」** —— 这点踩过坑：最初用侧栏根，但桌面布局里侧栏可以收起（宽 0），
+   缩放取不到、补偿静默失效（复测 desktopmirror 仍是 0.15）；改 body 后归零。
+
+### 复测矩阵（`.debug/probe-overshoot.mjs`，输出 collapsedY / 首帧 / 落定 / ratio）
+
+| profile | 环境 | 修前 ratio | 修后 ratio |
+| --- | --- | --- | --- |
+| soloweb | 纯宿主，无主题 | 0 | 0 |
+| nosuper | 无 superagent | 0 | 0 |
+| notheme | 有 superagent、无我们的插件 | 0.5 | 0.5（我们的静态规则不生效，属预期） |
+| themonly | 只有主题 | 0.14 | 0.14（同上） |
+| codextheme | 主题 + 本插件，缩放 1 | 0 | 0 |
+| desknosuper | 主题 + 本插件、无 superagent | 0.31 | **0** |
+| desktopmirror | desktop 全量 22 项、缩放 1.15 | 0.31 → 0.15 | **0** |
+
+### 回归（`.debug/probe-regress.mjs`）
+- codexprobe：铃铛 aria-label「消息视图」、点开 `data-codex-sidebar-date-view`、8 段标题
+  `[优先级, 昨天, 星期五, 星期四, 星期三, 星期二, 星期一, 更早]`、68 条预览、工作区行 0、69 行会话；
+  再点：标题与预览清空、工作区行回 9、`aria-pressed=false`。
+- codextheme：`dormant` 正常 —— 点铃铛转发主题铃铛（`data-dsh-claude-date-groups` 出现），再点还原 9 个工作区行。
+- 控制台只有 `[codex-sidebar] applied` 与 `locale → zh (优先级)`，`Element.prototype.animate` 确认已被我们的包装替换。
+- `docs/screenshot-date-view.png` 按新样式重拍（8 段、两行式会话行、工作区标签、中文界面）。
+
+### 版本与发布
+- `package.json` 0.3.1 → **0.3.2**；`lib/client.js` 74231 B（72.2 KiB，sha256 `49b5c33f…5334f`）。
+- `node scripts/deploy.mjs` 已发布到 `/Users/apple/.dsh/plugins/dsh-codex-sidebar`（desktop profile 的依赖指向这里）。
+- 提交 `138d127`（flip-zoom 补偿）与 `fef9bad`（文档 + 版本号），已推 `main`。
+- **桌面 App 仍在跑 2026-11-07 10:22 起的老进程**，需用户 **Cmd+Q** 退出后重开才装载新 bundle。
+
+### 待办
+- PR #254（会话行显示最近一段回复）被维护者 CLOSED（理由「方向与插件设计理念不契合」）；本插件自己的消息视图
+  已经自带两行式预览，不受影响。
+- 本轮未覆盖：真实桌面 App 里的动画观感（只在 web 镜像 profile 上量过）。
+
