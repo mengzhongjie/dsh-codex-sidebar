@@ -1,6 +1,6 @@
 # 交接：dsh-codex-sidebar
 
-> 最近更新：2026-11-08（展开工作区不再「弹一下」：superagent 伪行提前藏 + 主题紧凑行高提前压 + 宿主 FLIP 位移按有效缩放折算，七环境复测归零）。
+> 最近更新：2026-11-09（README 与实现对账、双 profile 回归全绿；此前 2026-11-08 展开工作区不再「弹一下」：superagent 伪行提前藏 + 主题紧凑行高提前压 + 宿主 FLIP 位移按有效缩放折算，七环境复测归零）。
 > 此前 2026-11-02：深入可用性与稳定性复核定稿，版本 0.2.0；高频切换、长短标题滑动、退出还原全绿。
 
 ## 目标与验收标准
@@ -533,6 +533,26 @@ Discussion-adoption / Entry-path tests、Build 站点构建），mergeable=MERGE
   `Lock file is already being held`（proper-lockfile），这是同 stateDir 双实例的预期行为，与本次改动无关。
 - 其余测试 profile（notheme / desknosuper / desktopminus / nobetter / nosuper / superagent）仍写 file:tgz，
   它们的 node_modules 多为指向 desktop/node_modules 的链接，实际也吃 fork 构建；未逐个改。
+
+### 2026-11-09 文档与实际实现对账（回归全绿）
+- 起因：上一轮把探针换成新脚本后，README 里仍写着已经删掉的 `probe-solo.mjs` / `probe-two-envs.mjs` /
+  `probe-height.mjs` / `probe-overlap.mjs` 与 `verify2.mjs`，文件表里漏了 `src/superagent.js`。
+- 改动（只在 `README.md`）：文件表补 `src/superagent.js`；验证章节改成实际存在的
+  `verify.mjs` + `probe-final.js`、`probe-overshoot.mjs`、`probe-hide-sheet.js`，并写明两个坑
+  （token 一次性、必须 `env -u` 掉 `*_proxy` 否则 Playwright 的 WebSocket 被 socks5 掐断）；
+  已知限制补一条「段落标题与预览只挂自有 class，不带 `data-*`」。
+- 顺带修正：`.debug/probe-regress.mjs` 的选择器由 `[data-codex-sidebar-date-header]` 改成
+  `.codex-sidebar-date-header`（源码 2026-11-05 起只挂 class，旧选择器会数到 0，看起来像「段落标题没了」）。
+- 回归（都按 `.debug/probe-final.js`，同时数 class 与 data 两种写法）：
+  · `codexprobe`（无主题，49800）：铃铛 `消息视图:false` → 点击后 `data-codex-sidebar-date-view=true`、
+    7 段标题 `[优先级, 星期六, 星期五, 星期四, 星期三, 星期二, 更早]`、69 条预览、工作区行 0、70 行会话；
+    再点：标题 0 / 预览 0 / 工作区行回 9。控制台 `applied (en, host en)` + `locale → zh (优先级)`。
+  · `desktopmirror`（主题 + 本插件 + superagent 0.2.2 + pageZoom 1.15，49820）：dormant 生效 ——
+    铃铛 `Message view:true`，第一次点转发给主题铃铛（`data-dsh-claude-date-groups=false`、工作区行 9），
+    第二次点主题日期视图打开（`themeDateGroups=true`、主题段落标题 7 个、会话行 69）；我们自己的
+    `data-codex-sidebar-date-view` 始终 false（按设计让位）。
+- `lib/client.js` 与已发布的 `~/.dsh/plugins/dsh-codex-sidebar/lib/client.js` sha256 一致
+  （`49b5c33f…5334f`，74231 B，v0.3.2），无需重新发布。
 
 ### 待办
 - PR #254（会话行显示最近一段回复）被维护者 CLOSED（理由「方向与插件设计理念不契合」）；本插件自己的消息视图

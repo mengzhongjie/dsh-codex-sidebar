@@ -85,6 +85,7 @@ dsh-claude-style 原本也内置一份「铃铛 + 日期分组」。主题仓库
 | src/settings.js | localStorage 读写与订阅 |
 | src/locale.js | 中英文案与语言解析（订阅宿主 locale 服务） |
 | src/coexist.js | 主题检测、主题日期铃铛定位、`themeHasDateView()`（主题是否仍自带日期视图） |
+| src/superagent.js | 向 dsh-superagent 问主会话 id，把被它藏掉的会话行顶回可见（含静态藏行的让行规则） |
 | src/styles.js | 注入的全部样式（全部走宿主 token，浅色/深色自适应） |
 | src/flip-zoom-fix.js | 页面被别人缩放时，把宿主列表动画的位移折算回本地单位（见更新记录 2026-11-08） |
 | src/constants.js | 常量：属性名、类名、存储键、默认设置 |
@@ -93,20 +94,27 @@ dsh-claude-style 原本也内置一份「铃铛 + 日期分组」。主题仓库
 
 用 Playwright 直连一个测试 profile 的页面，探针脚本按真实 DOM 断言：
 
-    dsh --profile codexprobe --port 49800 --no-open > .debug/probe-web.log 2>&1 &
-    URL=$(grep -o 'http://127.0.0.1:49800/?token=[^ ]*' .debug/probe-web.log | tail -1)
+    dsh --profile codexprobe --port 49800 --no-open > .debug/codexprobe.log 2>&1 &
+    URL=$(grep -a -o 'http://127.0.0.1:49800/?token=[^ ]*' .debug/codexprobe.log | tail -1)
     env -u all_proxy -u ALL_PROXY -u http_proxy -u HTTP_PROXY -u https_proxy -u HTTPS_PROXY \
       PLAYWRIGHT_BROWSERS_PATH=$PWD/.playwright-browsers \
-      node .debug/probe-solo.mjs "$URL"
+      node .debug/verify.mjs "$URL" .debug/probe-final.js .debug/shot.png
 
-现成的探针在 .debug/（开发期脚本，不随版本库分发）：probe-solo.mjs（无主题：铃铛进出消息视图、段落标题、预览）、
-probe-two-envs.mjs（两个隔离 profile 对照：无主题 / 带主题）、probe-height.mjs 与 probe-overlap.mjs（行高与叠字几何）。
+两点容易踩：token 是一次性的（被 curl 用掉后再开浏览器会 401，每轮都要重启服务取新 URL）；
+环境里的 socks5 代理会掐断 Playwright 的 WebSocket，必须像上面那样把 `*_proxy` 全部 `env -u` 掉。
+
+现成的探针在 .debug/（开发期脚本，不随版本库分发，整目录已在 .gitignore 里）：
+`probe-final.js`（铃铛进出消息视图、段落标题、预览、工作区行数；段落标题按 `.codex-sidebar-date-header` 选）、
+`probe-overshoot.mjs`（展开工作区时下面那组的首帧位移与过冲比，用于验 FLIP 缩放补偿）、
+`probe-hide-sheet.js`（确认 superagent 的静态藏行样式表已挂上）、`verify.mjs`（把探针包进 async IIFE 并截图的跑法）。
 
 ## 已知限制
 
 - 结果依赖宿主私有 DOM 契约（data-row-key、座位 span、flatList 容器），宿主大改版可能失效；
   选择器集中在 src/constants.js 与 src/sidebar-dom.js，方便一处改完。
-- 桌面 App 没有窗口级缩放的对外通道，页面缩放只能走 CSS；本插件已不提供缩放（那是主题的能力）。
+- 段落标题与预览行只挂自有 class（`.codex-sidebar-date-header` / `.codex-sidebar-preview`），
+  不带 `data-*` 属性；按属性写的旧探针会数到 0，别再照着旧选择器排查。
+- 桌面 App 没有窗口级缩放的对外通道，页面缩放只能走 CSS；本插件也不提供缩放（那是主题的能力）。
   但别的插件（例如主题的 pageZoom）缩放页面时，宿主的列表动画会算错位移，本插件用 `src/flip-zoom-fix.js` 补偿。
 - 若把主题还原成带日期视图的版本，本插件会重新让位：那时列表由主题的日期视图负责。
 
